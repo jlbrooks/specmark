@@ -16,9 +16,17 @@ export default function AnnotationList({
         onTouchMove={onHeaderTouchMove}
         style={onHeaderTouchStart ? { touchAction: 'none' } : undefined}
       >
-        <h2 className="text-sm font-semibold text-gray-700">
-          Feedback ({annotations.length})
-        </h2>
+        <div className="flex items-center gap-2">
+          <div className="flex flex-col">
+            <h2 className="text-sm font-semibold text-gray-700">
+              Feedback ({annotations.length})
+            </h2>
+            <span className="text-[10px] text-gray-400">Swipe down to close</span>
+          </div>
+          <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v14m0 0l-4-4m4 4l4-4" />
+          </svg>
+        </div>
         <div className="flex items-center gap-2">
           {annotations.length > 0 && (
             <button
