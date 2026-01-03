@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 export default function InputView({ content, onChange, onStartAnnotating }) {
   const [shareSuccess, setShareSuccess] = useState(false)
+  const [shareError, setShareError] = useState(false)
 
   const handleShareURL = async () => {
     if (!content.trim()) return
@@ -13,9 +14,13 @@ export default function InputView({ content, onChange, onStartAnnotating }) {
     try {
       await navigator.clipboard.writeText(url)
       setShareSuccess(true)
+      setShareError(false)
       setTimeout(() => setShareSuccess(false), 2000)
     } catch (err) {
       console.error('Failed to copy URL:', err)
+      setShareError(true)
+      setShareSuccess(false)
+      setTimeout(() => setShareError(false), 3000)
     }
   }
 
@@ -60,6 +65,13 @@ export default function InputView({ content, onChange, onStartAnnotating }) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 URL Copied!
+              </>
+            ) : shareError ? (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Failed to copy
               </>
             ) : (
               <>

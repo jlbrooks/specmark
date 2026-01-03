@@ -2,6 +2,17 @@ import { useState, useEffect } from 'react'
 import InputView from './components/InputView'
 import AnnotationView from './components/AnnotationView'
 
+// Generate a simple hash for the markdown content
+function hashContent(content) {
+  let hash = 0
+  for (let i = 0; i < content.length; i++) {
+    const char = content.charCodeAt(i)
+    hash = ((hash << 5) - hash) + char
+    hash = hash & hash // Convert to 32bit integer
+  }
+  return hash.toString()
+}
+
 function App() {
   const [markdownContent, setMarkdownContent] = useState('')
   const [annotations, setAnnotations] = useState([])
@@ -24,6 +35,34 @@ function App() {
     }
   }, [])
 
+  // Load annotations from localStorage when markdown content changes
+  useEffect(() => {
+    if (markdownContent.trim()) {
+      const contentHash = hashContent(markdownContent)
+      const storageKey = `annotations_${contentHash}`
+      const stored = localStorage.getItem(storageKey)
+      
+      if (stored) {
+        try {
+          setAnnotations(JSON.parse(stored))
+        } catch (e) {
+          console.error('Failed to parse stored annotations:', e)
+        }
+      } else {
+        setAnnotations([])
+      }
+    }
+  }, [markdownContent])
+
+  // Save annotations to localStorage whenever they change
+  useEffect(() => {
+    if (markdownContent.trim() && annotations.length >= 0) {
+      const contentHash = hashContent(markdownContent)
+      const storageKey = `annotations_${contentHash}`
+      localStorage.setItem(storageKey, JSON.stringify(annotations))
+    }
+  }, [annotations, markdownContent])
+
   const handleStartAnnotating = () => {
     if (markdownContent.trim()) {
       setCurrentView('annotate')
@@ -35,11 +74,22 @@ function App() {
   }
 
   const handleAddAnnotation = (annotation) => {
-    setAnnotations([...annotations, { ...annotation, id: Date.now().toString() }])
+    setAnnotations([...annotations, { ...annotation, id: crypto.randomUUID() }])
   }
 
   const handleDeleteAnnotation = (id) => {
     setAnnotations(annotations.filter(a => a.id !== id))
+  }
+
+  const handleClearAnnotations = () => {
+    if (window.confirm('Are you sure you want to clear all annotations? This cannot be undone.')) {
+      setAnnotations([])
+      if (markdownContent.trim()) {
+        const contentHash = hashContent(markdownContent)
+        const storageKey = `annotations_${contentHash}`
+        localStorage.removeItem(storageKey)
+      }
+    }
   }
 
   return (
@@ -56,6 +106,7 @@ function App() {
           annotations={annotations}
           onAddAnnotation={handleAddAnnotation}
           onDeleteAnnotation={handleDeleteAnnotation}
+          onClearAnnotations={handleClearAnnotations}
           onBackToEdit={handleBackToEdit}
         />
       )}

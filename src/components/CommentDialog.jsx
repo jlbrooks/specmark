@@ -3,10 +3,35 @@ import { useState, useEffect, useRef } from 'react'
 export default function CommentDialog({ selectedText, onSave, onCancel }) {
   const [comment, setComment] = useState('')
   const textareaRef = useRef(null)
+  const dialogRef = useRef(null)
 
   useEffect(() => {
     // Focus the textarea when dialog opens
     textareaRef.current?.focus()
+
+    // Trap focus within the dialog
+    const handleTabKey = (e) => {
+      if (e.key !== 'Tab') return
+
+      const focusableElements = dialogRef.current?.querySelectorAll(
+        'button, textarea, input, select, a[href]'
+      )
+      if (!focusableElements || focusableElements.length === 0) return
+
+      const firstElement = focusableElements[0]
+      const lastElement = focusableElements[focusableElements.length - 1]
+
+      if (e.shiftKey && document.activeElement === firstElement) {
+        e.preventDefault()
+        lastElement.focus()
+      } else if (!e.shiftKey && document.activeElement === lastElement) {
+        e.preventDefault()
+        firstElement.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleTabKey)
+    return () => document.removeEventListener('keydown', handleTabKey)
   }, [])
 
   const handleSubmit = (e) => {
@@ -30,9 +55,15 @@ export default function CommentDialog({ selectedText, onSave, onCancel }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full">
+      <div 
+        ref={dialogRef}
+        role="dialog" 
+        aria-modal="true" 
+        aria-labelledby="dialog-title"
+        className="bg-white rounded-lg shadow-xl max-w-2xl w-full"
+      >
         <div className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          <h3 id="dialog-title" className="text-lg font-semibold text-gray-900 mb-4">
             Add Feedback
           </h3>
 

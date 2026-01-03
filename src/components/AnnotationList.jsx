@@ -1,4 +1,4 @@
-export default function AnnotationList({ annotations, onDeleteAnnotation }) {
+export default function AnnotationList({ annotations, onDeleteAnnotation, onClearAnnotations }) {
   if (annotations.length === 0) {
     return (
       <div className="w-80 bg-white border-l border-gray-200 p-6">
@@ -13,9 +13,20 @@ export default function AnnotationList({ annotations, onDeleteAnnotation }) {
   return (
     <div className="w-80 bg-white border-l border-gray-200 overflow-auto">
       <div className="p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">
-          Annotations ({annotations.length})
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">
+            Annotations ({annotations.length})
+          </h2>
+          {annotations.length > 0 && (
+            <button
+              onClick={onClearAnnotations}
+              className="text-xs text-red-600 hover:text-red-800 font-medium"
+              title="Clear all annotations"
+            >
+              Clear All
+            </button>
+          )}
+        </div>
 
         <div className="space-y-4">
           {annotations.map((annotation) => (
@@ -39,9 +50,14 @@ export default function AnnotationList({ annotations, onDeleteAnnotation }) {
                   </div>
                 </div>
                 <button
-                  onClick={() => onDeleteAnnotation(annotation.id)}
-                  className="ml-2 text-gray-400 hover:text-red-600 focus:outline-none"
+                  onClick={() => {
+                    if (window.confirm('Delete this annotation?')) {
+                      onDeleteAnnotation(annotation.id)
+                    }
+                  }}
+                  className="ml-2 text-gray-400 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 rounded"
                   title="Delete annotation"
+                  aria-label="Delete annotation"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path

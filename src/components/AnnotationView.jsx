@@ -8,11 +8,13 @@ export default function AnnotationView({
   annotations,
   onAddAnnotation,
   onDeleteAnnotation,
+  onClearAnnotations,
   onBackToEdit,
 }) {
   const [showCommentDialog, setShowCommentDialog] = useState(false)
   const [selectedText, setSelectedText] = useState('')
   const [copySuccess, setCopySuccess] = useState(false)
+  const [copyError, setCopyError] = useState(false)
 
   const handleTextSelection = () => {
     const selection = window.getSelection()
@@ -52,9 +54,13 @@ export default function AnnotationView({
     try {
       await navigator.clipboard.writeText(feedback)
       setCopySuccess(true)
+      setCopyError(false)
       setTimeout(() => setCopySuccess(false), 2000)
     } catch (err) {
       console.error('Failed to copy:', err)
+      setCopyError(true)
+      setCopySuccess(false)
+      setTimeout(() => setCopyError(false), 3000)
     }
   }
 
@@ -89,6 +95,13 @@ export default function AnnotationView({
                     </svg>
                     Copied!
                   </>
+                ) : copyError ? (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Failed to copy
+                  </>
                 ) : (
                   <>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -106,10 +119,8 @@ export default function AnnotationView({
           className="flex-1 overflow-auto p-8"
           onMouseUp={handleTextSelection}
         >
-          <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-            <div className="prose prose-sm max-w-none">
-              <Markdown>{content}</Markdown>
-            </div>
+          <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-sm border border-gray-200 p-8 prose prose-slate max-w-none">
+            <Markdown>{content}</Markdown>
           </div>
         </div>
       </div>
@@ -118,6 +129,7 @@ export default function AnnotationView({
       <AnnotationList
         annotations={annotations}
         onDeleteAnnotation={onDeleteAnnotation}
+        onClearAnnotations={onClearAnnotations}
       />
 
       {/* Comment dialog */}
