@@ -35,6 +35,11 @@
   background: linear-gradient(transparent 50%, rgba(251, 191, 36, 0.6) 50%);
 }
 
+.annotation-mark-multi {
+  background: linear-gradient(transparent 48%, rgba(245, 158, 11, 0.7) 48%);
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.25);
+}
+
 .annotation-mark-active {
   background: linear-gradient(transparent 55%, rgba(59, 130, 246, 0.4) 55%);
   box-decoration-break: clone;

@@ -3,7 +3,6 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 export default function CommentDialog({ selectedText, position, onSave, onCancel }) {
   const [comment, setComment] = useState('')
   const textareaRef = useRef(null)
-  const dialogRef = useRef(null)
   const lastSubmitRef = useRef(0)
   const submitButtonRef = useRef(null)
   const submitRef = useRef(null)
@@ -79,7 +78,6 @@ export default function CommentDialog({ selectedText, position, onSave, onCancel
   // Calculate position - prefer above selection to avoid iOS menu
   const style = {}
   if (position) {
-    const viewportHeight = window.innerHeight
     const viewportWidth = window.innerWidth
     const dialogHeight = 200
     const dialogWidth = 320
@@ -106,7 +104,6 @@ export default function CommentDialog({ selectedText, position, onSave, onCancel
         onClick={onCancel}
       />
       <div
-        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         style={style}

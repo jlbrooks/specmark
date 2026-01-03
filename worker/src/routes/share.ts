@@ -18,7 +18,8 @@ app.post('/', async (c) => {
     }, 400)
   }
 
-  if (body.length > MAX_SIZE) {
+  const byteLength = new TextEncoder().encode(body).length
+  if (byteLength > MAX_SIZE) {
     return c.json<ErrorResponse>({
       error: 'content_too_large',
       message: 'Markdown content exceeds 500KB limit'

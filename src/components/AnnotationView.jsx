@@ -17,25 +17,25 @@ export default function AnnotationView({
   const [selectionPosition, setSelectionPosition] = useState(null)
   const [copySuccess, setCopySuccess] = useState(false)
   const [copyError, setCopyError] = useState(false)
+  const [copyFallbackText, setCopyFallbackText] = useState(null)
   const [showAnnotations, setShowAnnotations] = useState(() => {
     if (typeof window === 'undefined') return true
     return window.matchMedia('(min-width: 768px)').matches
   })
   const highlightRefs = useRef([])
   const contentRef = useRef(null)
-  const tooltipRef = useRef(null)
   const selectionRangeRef = useRef(null)
   const selectionOffsetsRef = useRef(null)
   const openingDialogRef = useRef(false)
 
   // Highlight existing annotations in the content
   useEffect(() => {
-    if (!contentRef.current || annotations.length === 0) return
+    if (!contentRef.current) return
 
     const container = contentRef.current
 
     // Clear any existing annotation highlights (but not active selection)
-    container.querySelectorAll('mark[data-annotation]').forEach((mark) => {
+    container.querySelectorAll('mark[data-annotation], mark[data-annotations]').forEach((mark) => {
       const parent = mark.parentNode
       while (mark.firstChild) {
         parent.insertBefore(mark.firstChild, mark)
@@ -46,24 +46,12 @@ export default function AnnotationView({
     // Normalize text nodes after removing marks
     container.normalize()
 
-    // Apply highlights for each annotation
-    annotations.forEach((annotation) => {
-      const rangeStart = annotation?.range?.start
-      const rangeEnd = annotation?.range?.end
-      const offsets = (Number.isFinite(rangeStart) && Number.isFinite(rangeEnd) && rangeEnd > rangeStart)
-        ? { start: rangeStart, end: rangeEnd }
-        : findOffsetsByText(container, annotation.selectedText)
+    if (annotations.length === 0) return
 
-      if (!offsets) return
+    const ranges = buildAnnotationRanges(container, annotations)
+    if (ranges.length === 0) return
 
-      const range = createRangeFromOffsets(container, offsets.start, offsets.end)
-      if (!range) return
-
-      wrapRangeInMarks(container, range, 'annotation-mark', {
-        'data-annotation': annotation.id,
-        title: 'Click to view annotation',
-      })
-    })
+    applyAnnotationHighlights(container, ranges)
   }, [annotations, content])
 
   const clearHighlight = useCallback(() => {
@@ -133,7 +121,7 @@ export default function AnnotationView({
             y: rect.top,
           })
           setShowTooltip(true)
-        } catch (e) {
+        } catch {
           // Selection might be collapsed or invalid
         }
       } else if (showTooltip && !openingDialogRef.current) {
@@ -184,11 +172,13 @@ export default function AnnotationView({
       await navigator.clipboard.writeText(feedback)
       setCopySuccess(true)
       setCopyError(false)
+      setCopyFallbackText(null)
       setTimeout(() => setCopySuccess(false), 2000)
     } catch (err) {
       console.error('Failed to copy:', err)
       setCopyError(true)
       setCopySuccess(false)
+      setCopyFallbackText(feedback)
       setTimeout(() => setCopyError(false), 3000)
     }
   }
@@ -285,7 +275,6 @@ export default function AnnotationView({
       {/* Floating tooltip button - positioned above selection */}
       {showTooltip && selectionPosition && (
         <button
-          ref={tooltipRef}
           onClick={handleTooltipClick}
           style={{
             position: 'fixed',
@@ -309,6 +298,33 @@ export default function AnnotationView({
           onSave={handleAddComment}
           onCancel={handleCancelComment}
         />
+      )}
+
+      {copyFallbackText && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-gray-900">Copy feedback</h2>
+              <button
+                onClick={() => setCopyFallbackText(null)}
+                className="text-gray-400 hover:text-gray-600"
+                aria-label="Close"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mb-2">Clipboard access failed — copy manually below.</p>
+            <textarea
+              readOnly
+              rows={8}
+              value={copyFallbackText}
+              onFocus={(e) => e.target.select()}
+              className="w-full p-2 text-xs font-mono border border-gray-200 rounded-md bg-gray-50"
+            />
+          </div>
+        </div>
       )}
     </div>
   )
@@ -339,7 +355,6 @@ function wrapRangeInMarks(container, range, className, attributes) {
 
   textNodes.forEach((node) => {
     if (!range.intersectsNode(node)) return
-    if (node.parentElement?.closest('mark[data-annotation], mark[data-active]')) return
 
     let startOffset = 0
     let endOffset = node.textContent.length
@@ -375,41 +390,65 @@ function wrapRangeInMarks(container, range, className, attributes) {
   return marks
 }
 
-function createRangeFromOffsets(container, start, end) {
-  if (!container || start == null || end == null || end <= start) return null
+function applyAnnotationHighlights(container, ranges) {
+  const breakpoints = Array.from(new Set(ranges.flatMap((range) => [range.start, range.end])))
+    .sort((a, b) => a - b)
+  const nodes = getTextNodesWithOffsets(container)
 
+  nodes.forEach(({ node, start, end }) => {
+    if (end <= start) return
+
+    const intersects = ranges.some((range) => range.start < end && range.end > start)
+    if (!intersects) return
+
+    const localBreaks = breakpoints.filter((point) => point > start && point < end)
+    const points = [start, ...localBreaks, end]
+    const nodeText = node.textContent || ''
+    const fragment = document.createDocumentFragment()
+
+    for (let i = 0; i < points.length - 1; i++) {
+      const segStart = points[i]
+      const segEnd = points[i + 1]
+      if (segStart === segEnd) continue
+
+      const segmentText = nodeText.slice(segStart - start, segEnd - start)
+      if (!segmentText) continue
+
+      const activeIds = ranges
+        .filter((range) => range.start <= segStart && range.end >= segEnd)
+        .map((range) => range.id)
+
+      if (activeIds.length === 0) {
+        fragment.appendChild(document.createTextNode(segmentText))
+        continue
+      }
+
+      const mark = document.createElement('mark')
+      mark.className = activeIds.length > 1 ? 'annotation-mark annotation-mark-multi' : 'annotation-mark'
+      mark.setAttribute('data-annotations', activeIds.join(','))
+      mark.setAttribute('data-annotation', activeIds[0])
+      mark.title = activeIds.length > 1 ? 'Multiple annotations' : 'Click to view annotation'
+      mark.appendChild(document.createTextNode(segmentText))
+      fragment.appendChild(mark)
+    }
+
+    node.parentNode.replaceChild(fragment, node)
+  })
+}
+
+function getTextNodesWithOffsets(container) {
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
-  let currentOffset = 0
-  let startNode = null
-  let endNode = null
-  let startOffset = 0
-  let endOffset = 0
+  const nodes = []
+  let offset = 0
 
   while (walker.nextNode()) {
     const node = walker.currentNode
-    const nodeLength = node.textContent.length
-    const nextOffset = currentOffset + nodeLength
-
-    if (!startNode && start <= nextOffset) {
-      startNode = node
-      startOffset = Math.max(0, start - currentOffset)
-    }
-
-    if (startNode && end <= nextOffset) {
-      endNode = node
-      endOffset = Math.max(0, end - currentOffset)
-      break
-    }
-
-    currentOffset = nextOffset
+    const length = node.textContent.length
+    nodes.push({ node, start: offset, end: offset + length })
+    offset += length
   }
 
-  if (!startNode || !endNode) return null
-
-  const range = document.createRange()
-  range.setStart(startNode, startOffset)
-  range.setEnd(endNode, endOffset)
-  return range
+  return nodes
 }
 
 function getRangeOffsets(range, container) {
@@ -459,10 +498,33 @@ function getTextLengthFromRange(container, range) {
   return length
 }
 
-function findOffsetsByText(container, text) {
-  if (!container || !text) return null
+function buildAnnotationRanges(container, annotations) {
   const content = container.textContent || ''
-  const index = content.indexOf(text)
-  if (index === -1) return null
-  return { start: index, end: index + text.length }
+  const contentLength = content.length
+  const ranges = []
+  const lastIndexByText = new Map()
+
+  annotations.forEach((annotation) => {
+    const rangeStart = annotation?.range?.start
+    const rangeEnd = annotation?.range?.end
+
+    if (Number.isFinite(rangeStart) && Number.isFinite(rangeEnd) && rangeEnd > rangeStart) {
+      if (rangeStart >= 0 && rangeEnd <= contentLength) {
+        ranges.push({ start: rangeStart, end: rangeEnd, id: annotation.id })
+      }
+      return
+    }
+
+    const searchText = annotation.selectedText
+    if (!searchText) return
+
+    const startIndex = lastIndexByText.get(searchText) ?? 0
+    const index = content.indexOf(searchText, startIndex)
+    if (index === -1) return
+
+    lastIndexByText.set(searchText, index + searchText.length)
+    ranges.push({ start: index, end: index + searchText.length, id: annotation.id })
+  })
+
+  return ranges
 }

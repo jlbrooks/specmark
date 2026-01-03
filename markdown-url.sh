@@ -21,8 +21,8 @@ markdown-url() {
     return 1
   fi
 
-  # Read file and base64 encode
-  local encoded=$(cat "$file" | base64 -w 0)
+  # Read file and base64url encode
+  local encoded=$(cat "$file" | base64 -w 0 | tr '+/' '-_' | tr -d '=')
   local url="${host}/?markdown=${encoded}"
 
   # Copy to clipboard if available

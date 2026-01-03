@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import { API_URL } from '../config'
+import { encodeMarkdownForUrl } from '../utils/markdownShare'
 
 export default function InputView({ content, onChange, onStartAnnotating, onLoadShareCode, error }) {
   const [shareSuccess, setShareSuccess] = useState(false)
   const [shareError, setShareError] = useState(false)
+  const [shareUrlError, setShareUrlError] = useState(false)
+  const [shareUrlFallback, setShareUrlFallback] = useState('')
   const [codeInput, setCodeInput] = useState('')
   const [codeInputError, setCodeInputError] = useState('')
   const [showShareResult, setShowShareResult] = useState(null)
@@ -12,20 +15,23 @@ export default function InputView({ content, onChange, onStartAnnotating, onLoad
   const handleShareURL = async () => {
     if (!content.trim()) return
 
-    // Encode markdown as base64 for cleaner URLs
-    const encoded = btoa(content)
+    // Encode markdown as URL-safe base64 with UTF-8 support
+    const encoded = encodeMarkdownForUrl(content)
     const url = `${window.location.origin}${window.location.pathname}?markdown=${encoded}`
 
     try {
       await navigator.clipboard.writeText(url)
       setShareSuccess(true)
       setShareError(false)
+      setShareUrlError(false)
+      setShareUrlFallback('')
       setTimeout(() => setShareSuccess(false), 2000)
     } catch (err) {
       console.error('Failed to copy URL:', err)
-      setShareError(true)
+      setShareUrlError(true)
+      setShareUrlFallback(url)
       setShareSuccess(false)
-      setTimeout(() => setShareError(false), 3000)
+      setTimeout(() => setShareUrlError(false), 3000)
     }
   }
 
@@ -149,6 +155,36 @@ export default function InputView({ content, onChange, onStartAnnotating, onLoad
         </div>
       </header>
 
+      {/* Code entry - mobile */}
+      <div className="sm:hidden px-4 pb-3">
+        <form onSubmit={handleLoadCode} className="flex items-start gap-2">
+          <div className="flex-1">
+            <input
+              type="text"
+              value={codeInput}
+              onChange={(e) => {
+                setCodeInput(e.target.value.toUpperCase())
+                setCodeInputError('')
+              }}
+              placeholder="Enter share code"
+              maxLength={6}
+              className={`w-full px-3 py-2 text-sm font-mono uppercase border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                codeInputError ? 'border-red-300' : 'border-gray-300'
+              }`}
+            />
+            {codeInputError && (
+              <p className="mt-1 text-xs text-red-500">{codeInputError}</p>
+            )}
+          </div>
+          <button
+            type="submit"
+            className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Load
+          </button>
+        </form>
+      </div>
+
       <div className="flex-1 flex flex-col p-6">
         <div className="flex-1 flex flex-col">
           <label htmlFor="markdown-input" className="text-sm font-medium text-gray-700 mb-2">
@@ -222,6 +258,21 @@ export default function InputView({ content, onChange, onStartAnnotating, onLoad
             Start Annotating
           </button>
         </div>
+
+        {shareUrlFallback && (
+          <div className="mt-3 w-full">
+            <p className={`text-xs ${shareUrlError ? 'text-red-500' : 'text-gray-500'}`}>
+              {shareUrlError ? 'Clipboard failed — copy the URL below.' : 'Copy URL:'}
+            </p>
+            <input
+              type="text"
+              readOnly
+              value={shareUrlFallback}
+              onFocus={(e) => e.target.select()}
+              className="mt-1 w-full px-3 py-2 text-xs font-mono bg-gray-50 border border-gray-200 rounded-md"
+            />
+          </div>
+        )}
       </div>
 
       {/* Share result modal */}

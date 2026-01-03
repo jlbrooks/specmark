@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import InputView from './components/InputView'
 import AnnotationView from './components/AnnotationView'
 import { API_URL } from './config'
+import { decodeMarkdownFromUrl } from './utils/markdownShare'
 
 const SAMPLE_MARKDOWN = `# Project Specification
 
@@ -120,16 +121,16 @@ function App() {
     }
 
     // Fallback to legacy base64/URL encoded markdown
-    const urlMarkdown = params.get('markdown') || params.get('md')
+    const base64Markdown = params.get('markdown')
+    if (base64Markdown) {
+      const decoded = decodeMarkdownFromUrl(base64Markdown)
+      setMarkdownContent(decoded)
+      return
+    }
+
+    const urlMarkdown = params.get('md')
     if (urlMarkdown) {
-      try {
-        // Try to decode as base64 first
-        const decoded = atob(urlMarkdown)
-        setMarkdownContent(decoded)
-      } catch (e) {
-        // If base64 fails, use URL-decoded value
-        setMarkdownContent(decodeURIComponent(urlMarkdown))
-      }
+      setMarkdownContent(urlMarkdown)
     }
   }, [])
 
@@ -179,11 +180,11 @@ function App() {
   }
 
   const handleAddAnnotation = (annotation) => {
-    setAnnotations([...annotations, { ...annotation, id: createAnnotationId() }])
+    setAnnotations((prev) => [...prev, { ...annotation, id: createAnnotationId() }])
   }
 
   const handleDeleteAnnotation = (id) => {
-    setAnnotations(annotations.filter(a => a.id !== id))
+    setAnnotations((prev) => prev.filter((annotation) => annotation.id !== id))
   }
 
   const handleClearAnnotations = () => {
