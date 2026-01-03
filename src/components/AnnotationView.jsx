@@ -249,6 +249,12 @@ export default function AnnotationView({
         <span className="hidden sm:inline">Select text to add feedback</span>
         <span className="sm:hidden">Long-press to select, tap + to comment</span>
       </div>
+      <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-40 text-[11px] text-gray-400 pointer-events-none text-center px-4">
+        <span className="inline-flex items-center gap-2">
+          <span className="w-6 h-3 rounded-sm annotation-mark annotation-mark-multi" aria-hidden="true" />
+          Overlapping comments
+        </span>
+      </div>
 
       {/* Main content */}
       <div className="max-w-3xl mx-auto px-6 py-20">
