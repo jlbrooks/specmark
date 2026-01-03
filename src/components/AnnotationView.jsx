@@ -36,6 +36,9 @@ export default function AnnotationView({
   const sheetOffsetRef = useRef(0)
   const sheetDraggingRef = useRef(false)
 
+  const isMobile = typeof window !== 'undefined'
+    && window.matchMedia('(max-width: 640px)').matches
+
   // Highlight existing annotations in the content
   useEffect(() => {
     if (!contentRef.current) return
@@ -355,7 +358,11 @@ export default function AnnotationView({
       </div>
 
       {/* Hint text */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 text-sm text-gray-400 pointer-events-none text-center px-4">
+      <div
+        className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-40 text-sm text-gray-400 pointer-events-none text-center px-4 ${
+          (showTooltip || showCommentDialog) && isMobile ? 'opacity-0' : ''
+        }`}
+      >
         <span className="hidden sm:inline">Select text to add feedback</span>
         <span className="sm:hidden">Long-press to select, tap + to comment</span>
       </div>
@@ -443,8 +450,12 @@ export default function AnnotationView({
           onMouseDown={handleTooltipPress}
           style={{
             position: 'fixed',
-            left: `${Math.max(24, Math.min(selectionPosition.x - 20, window.innerWidth - 64))}px`,
-            top: `${selectionPosition.y - 48}px`, // 40px button + 8px gap above selection
+            left: isMobile
+              ? '50%'
+              : `${Math.max(24, Math.min(selectionPosition.x - 20, window.innerWidth - 64))}px`,
+            top: isMobile ? 'auto' : `${selectionPosition.y - 48}px`, // 40px button + 8px gap above selection
+            bottom: isMobile ? 'calc(env(safe-area-inset-bottom, 0px) + 72px)' : 'auto',
+            transform: isMobile ? 'translateX(-50%)' : 'none',
           }}
           className="z-50 w-10 h-10 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-full shadow-lg flex items-center justify-center transition-colors touch-manipulation select-none"
           aria-label="Add comment"
