@@ -546,6 +546,8 @@ function wrapRangeInMarks(container, range, className, attributes) {
     }
 
     if (startOffset === endOffset) return
+    const segmentText = node.textContent.slice(startOffset, endOffset)
+    if (segmentText.trim() === '') return
 
     let target = node
     if (endOffset < target.textContent.length) {
@@ -577,12 +579,15 @@ function applyAnnotationHighlights(container, ranges) {
   nodes.forEach(({ node, start, end }) => {
     if (end <= start) return
 
+    // Skip text nodes that contain only whitespace
+    const nodeText = node.textContent || ''
+    if (nodeText.trim() === '') return
+
     const intersects = ranges.some((range) => range.start < end && range.end > start)
     if (!intersects) return
 
     const localBreaks = breakpoints.filter((point) => point > start && point < end)
     const points = [start, ...localBreaks, end]
-    const nodeText = node.textContent || ''
     const fragment = document.createDocumentFragment()
 
     for (let i = 0; i < points.length - 1; i++) {
@@ -597,7 +602,8 @@ function applyAnnotationHighlights(container, ranges) {
         .filter((range) => range.start <= segStart && range.end >= segEnd)
         .map((range) => range.id)
 
-      if (activeIds.length === 0) {
+      // Don't highlight whitespace-only segments (including newlines)
+      if (activeIds.length === 0 || segmentText.trim() === '') {
         fragment.appendChild(document.createTextNode(segmentText))
         continue
       }
@@ -689,7 +695,18 @@ function buildAnnotationRanges(container, annotations) {
 
     if (Number.isFinite(rangeStart) && Number.isFinite(rangeEnd) && rangeEnd > rangeStart) {
       if (rangeStart >= 0 && rangeEnd <= contentLength) {
-        ranges.push({ start: rangeStart, end: rangeEnd, id: annotation.id })
+        // Trim whitespace from the range
+        const rangeText = content.slice(rangeStart, rangeEnd)
+        const trimmedText = rangeText.replace(/^\s+/, '') // Remove leading whitespace
+        const leadingWhitespace = rangeText.length - trimmedText.length
+        const trimmedStart = rangeStart + leadingWhitespace
+
+        const finalText = trimmedText.replace(/\s+$/, '') // Remove trailing whitespace
+        const trimmedEnd = trimmedStart + finalText.length
+
+        if (trimmedEnd > trimmedStart) {
+          ranges.push({ start: trimmedStart, end: trimmedEnd, id: annotation.id })
+        }
       }
       return
     }
