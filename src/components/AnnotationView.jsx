@@ -241,6 +241,7 @@ export default function AnnotationView({
     if (!showAnnotations) return
     const touch = event.touches?.[0]
     if (!touch) return
+    event.preventDefault()
     sheetStartYRef.current = touch.clientY
     sheetDraggingRef.current = true
     setIsSheetDragging(true)
@@ -250,6 +251,7 @@ export default function AnnotationView({
     if (!sheetDraggingRef.current) return
     const touch = event.touches?.[0]
     if (!touch) return
+    event.preventDefault()
     const delta = Math.max(0, touch.clientY - sheetStartYRef.current)
     sheetOffsetRef.current = delta
     setSheetOffset(delta)
@@ -395,16 +397,18 @@ export default function AnnotationView({
             style={{
               transform: `translateY(${sheetOffset}px)`,
               transition: isSheetDragging ? 'none' : 'transform 200ms ease',
+              overscrollBehaviorY: 'contain',
             }}
             onTouchEnd={handleSheetTouchEnd}
             onTouchCancel={handleSheetTouchEnd}
           >
             <div
-              className="flex items-center justify-center pt-2 pb-3"
+              className="flex items-center justify-center pt-3 pb-4"
               onTouchStart={handleSheetTouchStart}
               onTouchMove={handleSheetTouchMove}
+              style={{ touchAction: 'none' }}
             >
-              <div className="w-10 h-1.5 rounded-full bg-gray-300" />
+              <div className="w-12 h-2 rounded-full bg-gray-300" />
             </div>
             <AnnotationList
               annotations={annotations}
