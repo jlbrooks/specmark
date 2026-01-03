@@ -1,38 +1,34 @@
 import { useState, useEffect, useRef } from 'react'
 
-export default function CommentDialog({ selectedText, onSave, onCancel }) {
+export default function CommentDialog({ selectedText, position, onSave, onCancel }) {
   const [comment, setComment] = useState('')
   const textareaRef = useRef(null)
   const dialogRef = useRef(null)
 
   useEffect(() => {
-    // Focus the textarea when dialog opens
     textareaRef.current?.focus()
+  }, [])
 
-    // Trap focus within the dialog
-    const handleTabKey = (e) => {
-      if (e.key !== 'Tab') return
-
-      const focusableElements = dialogRef.current?.querySelectorAll(
-        'button, textarea, input, select, a[href]'
-      )
-      if (!focusableElements || focusableElements.length === 0) return
-
-      const firstElement = focusableElements[0]
-      const lastElement = focusableElements[focusableElements.length - 1]
-
-      if (e.shiftKey && document.activeElement === firstElement) {
-        e.preventDefault()
-        lastElement.focus()
-      } else if (!e.shiftKey && document.activeElement === lastElement) {
-        e.preventDefault()
-        firstElement.focus()
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dialogRef.current && !dialogRef.current.contains(e.target)) {
+        onCancel()
       }
     }
 
-    document.addEventListener('keydown', handleTabKey)
-    return () => document.removeEventListener('keydown', handleTabKey)
-  }, [])
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        onCancel()
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [onCancel])
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -43,63 +39,65 @@ export default function CommentDialog({ selectedText, onSave, onCancel }) {
   }
 
   const handleKeyDown = (e) => {
-    // Submit on Cmd/Ctrl + Enter
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       handleSubmit(e)
     }
-    // Cancel on Escape
-    if (e.key === 'Escape') {
-      onCancel()
+  }
+
+  // Calculate position - try to show below selection, but flip if near bottom
+  const style = {}
+  if (position) {
+    const viewportHeight = window.innerHeight
+    const viewportWidth = window.innerWidth
+    const dialogHeight = 200
+    const dialogWidth = 320
+
+    // Position horizontally - center on selection, but keep in viewport
+    let left = position.x - dialogWidth / 2
+    left = Math.max(16, Math.min(left, viewportWidth - dialogWidth - 16))
+
+    // Position vertically - prefer below, flip to above if needed
+    let top = position.y + 8
+    if (top + dialogHeight > viewportHeight - 16) {
+      top = position.y - dialogHeight - 8
     }
+
+    style.left = `${left}px`
+    style.top = `${top}px`
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div 
-        ref={dialogRef}
-        role="dialog" 
-        aria-modal="true" 
-        aria-labelledby="dialog-title"
-        className="bg-white rounded-lg shadow-xl max-w-2xl w-full"
-      >
-        <div className="p-6">
-          <h3 id="dialog-title" className="text-lg font-semibold text-gray-900 mb-4">
-            Add Feedback
-          </h3>
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      style={style}
+      className="fixed z-50 w-80 bg-white rounded-lg shadow-2xl border border-gray-200 overflow-hidden"
+    >
+      <div className="bg-blue-50 border-b border-blue-100 px-3 py-2">
+        <p className="text-xs text-blue-800 truncate" title={selectedText}>
+          "{selectedText.length > 50 ? selectedText.slice(0, 50) + '...' : selectedText}"
+        </p>
+      </div>
 
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Selected Text
-            </label>
-            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-              <p className="text-sm text-gray-800 italic">"{selectedText}"</p>
-            </div>
-          </div>
+      <div className="p-3">
+        <textarea
+          ref={textareaRef}
+          rows="3"
+          className="w-full p-2 text-sm border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+          placeholder="Add your feedback..."
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          onKeyDown={handleKeyDown}
+        />
 
-          <div className="mb-4">
-            <label htmlFor="comment" className="block text-sm font-medium text-gray-700 mb-2">
-              Your Feedback
-            </label>
-            <textarea
-              ref={textareaRef}
-              id="comment"
-              rows="4"
-              className="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Enter your feedback here..."
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              onKeyDown={handleKeyDown}
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Press Cmd/Ctrl + Enter to save, Esc to cancel
-            </p>
-          </div>
-
-          <div className="flex justify-end gap-3">
+        <div className="flex items-center justify-between mt-2">
+          <span className="text-xs text-gray-400">⌘↵ to save</span>
+          <div className="flex gap-2">
             <button
               type="button"
               onClick={onCancel}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-800"
             >
               Cancel
             </button>
@@ -107,9 +105,9 @@ export default function CommentDialog({ selectedText, onSave, onCancel }) {
               type="button"
               onClick={handleSubmit}
               disabled={!comment.trim()}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
+              className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
-              Save Feedback
+              Add
             </button>
           </div>
         </div>
