@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import InputView from './components/InputView'
 import AnnotationView from './components/AnnotationView'
 import { API_URL } from './config'
@@ -78,6 +78,33 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
+  const getViewFromUrl = useCallback(() => {
+    const params = new URLSearchParams(window.location.search)
+    return params.get('view') === 'annotate' ? 'annotate' : 'input'
+  }, [])
+
+  const updateUrlParams = useCallback((updates, { replace = false } = {}) => {
+    const url = new URL(window.location.href)
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value == null || value === '') {
+        url.searchParams.delete(key)
+      } else {
+        url.searchParams.set(key, value)
+      }
+    })
+    if (!url.searchParams.get('view')) {
+      url.searchParams.set('view', getViewFromUrl())
+    }
+    const nextView = url.searchParams.get('view') || 'input'
+    const method = replace ? 'replaceState' : 'pushState'
+    window.history[method]({ view: nextView }, '', url)
+  }, [getViewFromUrl])
+
+  const navigateToView = useCallback((view, { replace = false } = {}) => {
+    updateUrlParams({ view }, { replace })
+    setCurrentView(view)
+  }, [updateUrlParams])
+
   // Get the storage key - use share code if available, otherwise content hash
   const getStorageKey = (content, code) => {
     if (code) {
@@ -87,7 +114,7 @@ function App() {
   }
 
   // Fetch shared content by code
-  const fetchSharedContent = async (code) => {
+  const fetchSharedContent = useCallback(async (code) => {
     setLoading(true)
     setError(null)
     try {
@@ -100,18 +127,21 @@ function App() {
 
       setMarkdownContent(data.markdown)
       setShareCode(code.toUpperCase())
-      setCurrentView('annotate')
+      navigateToView('annotate')
     } catch (err) {
       setError(err.message)
       setShareCode(null)
     } finally {
       setLoading(false)
     }
-  }
+  }, [navigateToView])
 
   // Load markdown from URL query parameter on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
+    if (!params.get('view')) {
+      updateUrlParams({ view: 'input' }, { replace: true })
+    }
 
     // ?c= takes precedence (share code)
     const code = params.get('c')
@@ -132,7 +162,17 @@ function App() {
     if (urlMarkdown) {
       setMarkdownContent(urlMarkdown)
     }
-  }, [])
+  }, [fetchSharedContent, updateUrlParams])
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const nextView = getViewFromUrl()
+      setCurrentView(nextView)
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [getViewFromUrl])
 
   // Load annotations from localStorage when markdown content or share code changes
   useEffect(() => {
@@ -163,19 +203,17 @@ function App() {
 
   const handleStartAnnotating = () => {
     if (markdownContent.trim()) {
-      setCurrentView('annotate')
+      navigateToView('annotate')
     }
   }
 
   const handleBackToEdit = () => {
-    setCurrentView('input')
+    navigateToView('input')
     // Clear share code when going back to edit (user is now working with local content)
     if (shareCode) {
       setShareCode(null)
       // Update URL to remove the code param
-      const url = new URL(window.location.href)
-      url.searchParams.delete('c')
-      window.history.replaceState({}, '', url)
+      updateUrlParams({ c: null }, { replace: true })
     }
   }
 
@@ -200,9 +238,7 @@ function App() {
   const handleLoadShareCode = (code) => {
     fetchSharedContent(code)
     // Update URL to reflect the share code
-    const url = new URL(window.location.href)
-    url.searchParams.set('c', code.toUpperCase())
-    window.history.replaceState({}, '', url)
+    updateUrlParams({ c: code.toUpperCase() }, { replace: true })
   }
 
   // Loading state
