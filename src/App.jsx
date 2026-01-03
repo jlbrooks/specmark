@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import InputView from './components/InputView'
 import AnnotationView from './components/AnnotationView'
 import { API_URL } from './config'
@@ -51,6 +51,8 @@ We will use \`JWT tokens\` for session management with the following structure:
 - What is the session timeout policy?
 `
 
+const SESSION_STORAGE_KEY = 'markdown_annotator_session_v1'
+
 // Generate a simple hash for the markdown content
 function hashContent(content) {
   let hash = 0
@@ -70,6 +72,35 @@ function createAnnotationId() {
   return `a_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
 }
 
+function normalizeView(view) {
+  return view === 'annotate' ? 'annotate' : 'input'
+}
+
+function readSessionStorage() {
+  try {
+    const stored = localStorage.getItem(SESSION_STORAGE_KEY)
+    if (!stored) {
+      return null
+    }
+    const parsed = JSON.parse(stored)
+    if (!parsed?.markdown || typeof parsed.markdown !== 'string') {
+      return null
+    }
+    return parsed
+  } catch (err) {
+    console.warn('Failed to read session storage:', err)
+    return null
+  }
+}
+
+function writeSessionStorage(payload) {
+  try {
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(payload))
+  } catch (err) {
+    console.warn('Failed to write session storage:', err)
+  }
+}
+
 function App() {
   const [markdownContent, setMarkdownContent] = useState(SAMPLE_MARKDOWN)
   const [annotations, setAnnotations] = useState([])
@@ -77,6 +108,7 @@ function App() {
   const [shareCode, setShareCode] = useState(null) // Track if viewing shared content
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const sessionRestoredRef = useRef(false)
 
   const getViewFromUrl = useCallback(() => {
     const params = new URLSearchParams(window.location.search)
@@ -161,6 +193,18 @@ function App() {
     const urlMarkdown = params.get('md')
     if (urlMarkdown) {
       setMarkdownContent(urlMarkdown)
+      return
+    }
+
+    const session = readSessionStorage()
+    if (session) {
+      sessionRestoredRef.current = true
+      setMarkdownContent(session.markdown)
+      setAnnotations(Array.isArray(session.annotations) ? session.annotations : [])
+      setShareCode(session.shareCode || null)
+      const restoredView = normalizeView(session.view)
+      setCurrentView(restoredView)
+      updateUrlParams({ view: restoredView }, { replace: true })
     }
   }, [fetchSharedContent, updateUrlParams])
 
@@ -187,8 +231,11 @@ function App() {
           console.error('Failed to parse stored annotations:', e)
           setAnnotations([])
         }
-      } else {
+      } else if (!sessionRestoredRef.current) {
         setAnnotations([])
+      }
+      if (sessionRestoredRef.current) {
+        sessionRestoredRef.current = false
       }
     }
   }, [markdownContent, shareCode])
@@ -200,6 +247,22 @@ function App() {
       localStorage.setItem(storageKey, JSON.stringify(annotations))
     }
   }, [annotations, markdownContent, shareCode])
+
+  useEffect(() => {
+    if (!markdownContent.trim()) {
+      return
+    }
+    const timeoutId = window.setTimeout(() => {
+      writeSessionStorage({
+        markdown: markdownContent,
+        annotations,
+        view: currentView,
+        shareCode,
+        updatedAt: Date.now()
+      })
+    }, 300)
+    return () => window.clearTimeout(timeoutId)
+  }, [markdownContent, annotations, currentView, shareCode])
 
   const handleStartAnnotating = () => {
     if (markdownContent.trim()) {
