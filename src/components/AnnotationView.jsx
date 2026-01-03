@@ -21,6 +21,8 @@ export default function AnnotationView({
   const [copyFallbackText, setCopyFallbackText] = useState(null)
   const [editingAnnotationId, setEditingAnnotationId] = useState(null)
   const [dialogKey, setDialogKey] = useState(0)
+  const [sheetOffset, setSheetOffset] = useState(0)
+  const [isSheetDragging, setIsSheetDragging] = useState(false)
   const [showAnnotations, setShowAnnotations] = useState(() => {
     if (typeof window === 'undefined') return true
     return window.matchMedia('(min-width: 768px)').matches
@@ -30,6 +32,9 @@ export default function AnnotationView({
   const selectionRangeRef = useRef(null)
   const selectionOffsetsRef = useRef(null)
   const openingDialogRef = useRef(false)
+  const sheetStartYRef = useRef(0)
+  const sheetOffsetRef = useRef(0)
+  const sheetDraggingRef = useRef(false)
 
   // Highlight existing annotations in the content
   useEffect(() => {
@@ -225,6 +230,40 @@ export default function AnnotationView({
     setShowCommentDialog(true)
   }
 
+  const resetSheet = () => {
+    sheetDraggingRef.current = false
+    sheetOffsetRef.current = 0
+    setSheetOffset(0)
+    setIsSheetDragging(false)
+  }
+
+  const handleSheetTouchStart = (event) => {
+    if (!showAnnotations) return
+    const touch = event.touches?.[0]
+    if (!touch) return
+    sheetStartYRef.current = touch.clientY
+    sheetDraggingRef.current = true
+    setIsSheetDragging(true)
+  }
+
+  const handleSheetTouchMove = (event) => {
+    if (!sheetDraggingRef.current) return
+    const touch = event.touches?.[0]
+    if (!touch) return
+    const delta = Math.max(0, touch.clientY - sheetStartYRef.current)
+    sheetOffsetRef.current = delta
+    setSheetOffset(delta)
+  }
+
+  const handleSheetTouchEnd = () => {
+    if (!sheetDraggingRef.current) return
+    const threshold = Math.min(160, window.innerHeight * 0.25)
+    if (sheetOffsetRef.current > threshold) {
+      setShowAnnotations(false)
+    }
+    resetSheet()
+  }
+
   const handleCopyFeedback = async () => {
     if (annotations.length === 0) return
 
@@ -345,16 +384,37 @@ export default function AnnotationView({
         <div className="sm:hidden fixed inset-0 z-50">
           <div
             className="absolute inset-0 bg-black/40"
-            onClick={() => setShowAnnotations(false)}
+            onClick={() => {
+              setShowAnnotations(false)
+              resetSheet()
+            }}
             aria-hidden="true"
           />
-          <div className="absolute bottom-0 left-0 right-0 h-[70vh] px-3 pb-3">
+          <div
+            className="absolute bottom-0 left-0 right-0 h-[70vh] px-3 pb-3"
+            style={{
+              transform: `translateY(${sheetOffset}px)`,
+              transition: isSheetDragging ? 'none' : 'transform 200ms ease',
+            }}
+            onTouchEnd={handleSheetTouchEnd}
+            onTouchCancel={handleSheetTouchEnd}
+          >
+            <div
+              className="flex items-center justify-center pt-2 pb-3"
+              onTouchStart={handleSheetTouchStart}
+              onTouchMove={handleSheetTouchMove}
+            >
+              <div className="w-10 h-1.5 rounded-full bg-gray-300" />
+            </div>
             <AnnotationList
               annotations={annotations}
               onDeleteAnnotation={onDeleteAnnotation}
               onClearAnnotations={onClearAnnotations}
               onEditAnnotation={handleEditFromList}
-              onClose={() => setShowAnnotations(false)}
+              onClose={() => {
+                setShowAnnotations(false)
+                resetSheet()
+              }}
               className="rounded-t-2xl"
             />
           </div>
