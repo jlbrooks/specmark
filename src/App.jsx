@@ -78,6 +78,85 @@ function normalizeView(view) {
   return view === 'annotate' ? 'annotate' : 'input'
 }
 
+function getInitialState() {
+  if (typeof window === 'undefined') {
+    return {
+      markdown: SAMPLE_MARKDOWN,
+      annotations: [],
+      view: 'input',
+      shareCode: null,
+      pendingShareCode: null,
+      fromSession: false,
+      source: 'default',
+    }
+  }
+
+  const params = new URLSearchParams(window.location.search)
+  const view = normalizeView(params.get('view'))
+  const code = params.get('c')
+
+  if (code) {
+    return {
+      markdown: '',
+      annotations: [],
+      view: 'input',
+      shareCode: null,
+      pendingShareCode: code,
+      fromSession: false,
+      source: 'share',
+    }
+  }
+
+  const base64Markdown = params.get('markdown')
+  if (base64Markdown) {
+    return {
+      markdown: decodeMarkdownFromUrl(base64Markdown),
+      annotations: [],
+      view,
+      shareCode: null,
+      pendingShareCode: null,
+      fromSession: false,
+      source: 'url',
+    }
+  }
+
+  const urlMarkdown = params.get('md')
+  if (urlMarkdown) {
+    return {
+      markdown: urlMarkdown,
+      annotations: [],
+      view,
+      shareCode: null,
+      pendingShareCode: null,
+      fromSession: false,
+      source: 'url',
+    }
+  }
+
+  const session = readSessionStorage()
+  if (session) {
+    return {
+      markdown: session.markdown,
+      annotations: Array.isArray(session.annotations) ? session.annotations : [],
+      view: normalizeView(session.view),
+      shareCode: session.shareCode || null,
+      pendingShareCode: null,
+      fromSession: true,
+      source: 'session',
+    }
+  }
+
+  return {
+    markdown: SAMPLE_MARKDOWN,
+    annotations: [],
+    view,
+    shareCode: null,
+    pendingShareCode: null,
+    fromSession: false,
+    source: 'default',
+  }
+}
+
 function readSessionStorage() {
   try {
     const stored = localStorage.getItem(SESSION_STORAGE_KEY)
@@ -104,14 +183,17 @@ function writeSessionStorage(payload) {
 }
 
 function App() {
-  const [markdownContent, setMarkdownContent] = useState(SAMPLE_MARKDOWN)
-  const [annotations, setAnnotations] = useState([])
-  const [currentView, setCurrentView] = useState('input') // 'input' or 'annotate'
-  const [shareCode, setShareCode] = useState(null) // Track if viewing shared content
-  const [loading, setLoading] = useState(false)
+  const initialState = getInitialState()
+  const initialStateRef = useRef(initialState)
+  const initialSourceRef = useRef(initialState.source)
+  const [markdownContent, setMarkdownContent] = useState(initialState.markdown)
+  const [annotations, setAnnotations] = useState(initialState.annotations)
+  const [currentView, setCurrentView] = useState(initialState.view) // 'input' or 'annotate'
+  const [shareCode, setShareCode] = useState(initialState.shareCode) // Track if viewing shared content
+  const [loading, setLoading] = useState(initialState.source === 'share')
   const [shareLoadError, setShareLoadError] = useState(null)
   const [shareLoadOrigin, setShareLoadOrigin] = useState(null)
-  const sessionRestoredRef = useRef(false)
+  const sessionRestoredRef = useRef(initialState.fromSession)
 
   const getViewFromUrl = useCallback(() => {
     const params = new URLSearchParams(window.location.search)
@@ -201,43 +283,17 @@ function App() {
     return () => window.clearTimeout(timeoutId)
   }, [shareLoadError, shareLoadOrigin])
 
-  // Load markdown from URL query parameter on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    if (!params.get('view')) {
+    if (initialSourceRef.current === 'session') {
+      updateUrlParams({ view: initialStateRef.current.view }, { replace: true })
+    } else if (!params.get('view')) {
       updateUrlParams({ view: 'input' }, { replace: true })
     }
 
-    // ?c= takes precedence (share code)
     const code = params.get('c')
     if (code) {
       fetchSharedContent(code, { origin: 'link' })
-      return
-    }
-
-    // Fallback to legacy base64/URL encoded markdown
-    const base64Markdown = params.get('markdown')
-    if (base64Markdown) {
-      const decoded = decodeMarkdownFromUrl(base64Markdown)
-      setMarkdownContent(decoded)
-      return
-    }
-
-    const urlMarkdown = params.get('md')
-    if (urlMarkdown) {
-      setMarkdownContent(urlMarkdown)
-      return
-    }
-
-    const session = readSessionStorage()
-    if (session) {
-      sessionRestoredRef.current = true
-      setMarkdownContent(session.markdown)
-      setAnnotations(Array.isArray(session.annotations) ? session.annotations : [])
-      setShareCode(session.shareCode || null)
-      const restoredView = normalizeView(session.view)
-      setCurrentView(restoredView)
-      updateUrlParams({ view: restoredView }, { replace: true })
     }
   }, [fetchSharedContent, updateUrlParams])
 
