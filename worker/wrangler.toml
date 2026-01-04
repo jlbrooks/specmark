@@ -1,6 +1,7 @@
 name = "specmark-api"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
+account_id = "3ad44b235fdbcd9a5efc97023991b314"
 
 # KV Namespaces
 # For local dev, wrangler uses a local emulator
