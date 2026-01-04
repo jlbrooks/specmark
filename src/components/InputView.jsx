@@ -177,8 +177,11 @@ export default function InputView({
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
-            <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex">
-              <a href="/cli/">CLI Setup</a>
+            <Button asChild variant="outline" size="sm">
+              <a href="/cli/">
+                <span className="hidden sm:inline">CLI Setup</span>
+                <span className="sm:hidden">CLI</span>
+              </a>
             </Button>
             {/* Start Annotating - prominent on mobile */}
             <Button
@@ -299,6 +302,13 @@ export default function InputView({
                 </div>
                 <div className="sm:col-span-3 text-[11px] text-muted-foreground">
                   Share codes are 6 characters and expire after 7 days.
+                </div>
+                <div className="sm:col-span-3 text-[11px] text-muted-foreground">
+                  Prefer the terminal?{" "}
+                  <a href="/cli/" className="font-medium text-primary hover:underline">
+                    Set up the CLI
+                  </a>{" "}
+                  to create share links from the command line.
                 </div>
               </div>
             </CardContent>
