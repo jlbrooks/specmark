@@ -14,9 +14,16 @@ A web application for annotating Markdown specifications with highlights and com
 
 ## Analytics
 
-Specmark uses **Plausible Analytics** for anonymous, privacy-friendly usage tracking. The script is loaded in `index.html`, and the app records:
+Specmark uses **Umami Analytics** for anonymous, privacy-friendly usage tracking. The tracker script is injected at runtime when the following environment variables are set:
 
-- Page views (default Plausible behavior)
+- `VITE_UMAMI_SCRIPT_URL` (e.g. `https://analytics.example.com/script.js`)
+- `VITE_UMAMI_WEBSITE_ID` (the Umami website UUID)
+- Optional: `VITE_UMAMI_HOST_URL` (if your script is hosted separately from the collector)
+- Optional: `VITE_UMAMI_DOMAINS` (comma-separated list of allowed domains)
+
+The app records:
+
+- Page views (default Umami behavior)
 - `Share Create` when a share code is successfully created
 - `Share Load` when a share code is successfully retrieved
 - `Copy All` when feedback is copied to the clipboard
