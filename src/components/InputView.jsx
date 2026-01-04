@@ -358,12 +358,25 @@ export default function InputView({
         </div>
 
         <div className="flex-1 flex flex-col">
-          <label
-            htmlFor="markdown-input"
-            className="text-sm font-medium text-foreground mb-2"
-          >
-            Markdown Content
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label
+              htmlFor="markdown-input"
+              className="text-sm font-medium text-foreground"
+            >
+              Markdown Content
+            </label>
+            {content && (
+              <button
+                type="button"
+                onClick={() => onChange("")}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Clear markdown content"
+              >
+                <X className="h-3.5 w-3.5" />
+                Clear
+              </button>
+            )}
+          </div>
           <Textarea
             id="markdown-input"
             className="flex-1 w-full p-4 font-mono text-sm resize-none"
@@ -374,12 +387,6 @@ export default function InputView({
         </div>
 
         <div className="mt-4 flex gap-3 flex-wrap">
-          <Button
-            variant="outline"
-            onClick={() => onChange("")}
-          >
-            Clear
-          </Button>
           <Button
             variant="outline"
             onClick={handleShareURL}
