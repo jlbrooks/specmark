@@ -38,7 +38,6 @@ export default function AnnotationView({
   onUpdateAnnotation,
   onDeleteAnnotation,
   onClearAnnotations,
-  onBackToEdit,
 }) {
   const [showCommentDialog, setShowCommentDialog] = useState(false)
   const [showTooltip, setShowTooltip] = useState(false)
@@ -77,6 +76,15 @@ export default function AnnotationView({
       console.warn('Failed to save feedback settings:', err)
     }
   }, [exportSettings])
+
+  // Listen for copy-comments event from App.jsx header button
+  useEffect(() => {
+    const handleCopyEvent = () => {
+      handleCopyFeedback()
+    }
+    window.addEventListener('specmark:copy-comments', handleCopyEvent)
+    return () => window.removeEventListener('specmark:copy-comments', handleCopyEvent)
+  }, [annotations, exportSettings])
 
   // Highlight existing annotations in the content
   useEffect(() => {
@@ -344,66 +352,22 @@ export default function AnnotationView({
   }
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      {/* Floating toolbar */}
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-40 bg-background rounded-full shadow-lg border border-border px-2 py-1.5 flex flex-wrap items-center justify-center gap-1 max-w-[calc(100vw-2rem)]">
-        <Button
-          onClick={onBackToEdit}
-          variant="ghost"
-          size="sm"
-          className="rounded-full"
-        >
-          ← Edit
-        </Button>
-
-        <div className="w-px h-5 bg-border" />
-
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Floating toggle for annotations panel (mobile has different UI) */}
+      <div className="sm:hidden fixed bottom-4 right-4 z-40">
         <Button
           onClick={() => setShowAnnotations(!showAnnotations)}
-          variant={showAnnotations ? 'secondary' : 'ghost'}
-          size="sm"
-          className="rounded-full flex items-center gap-1.5"
+          variant={showAnnotations ? 'secondary' : 'default'}
+          size="icon"
+          className="rounded-full shadow-lg h-12 w-12"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
           </svg>
           {annotations.length > 0 && (
-            <Badge variant="secondary" className="h-5 w-5 justify-center rounded-full px-0 text-[11px]">
+            <Badge variant="destructive" className="absolute -top-1 -right-1 h-5 w-5 justify-center rounded-full px-0 text-[10px]">
               {annotations.length}
             </Badge>
-          )}
-        </Button>
-
-        <div className="w-px h-5 bg-border" />
-
-        <Button
-          onClick={handleCopyFeedback}
-          disabled={annotations.length === 0}
-          variant="ghost"
-          size="sm"
-          className="rounded-full flex items-center gap-1.5"
-        >
-          {copySuccess ? (
-            <>
-              <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Copied
-            </>
-          ) : copyError ? (
-            <>
-              <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              Failed
-            </>
-          ) : (
-            <>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              Copy All
-            </>
           )}
         </Button>
       </div>
@@ -425,7 +389,8 @@ export default function AnnotationView({
       </div>
 
       {/* Main content */}
-      <div className="max-w-3xl mx-auto px-6 py-20">
+      <div className="flex-1 overflow-auto">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <div
           ref={contentRef}
           tabIndex={-1}
@@ -446,10 +411,11 @@ export default function AnnotationView({
           </Markdown>
         </div>
       </div>
+      </div>
 
-      {/* Floating annotations panel */}
+      {/* Floating annotations panel - desktop */}
       {showAnnotations && annotations.length > 0 && (
-        <div className="hidden sm:block fixed right-4 top-20 bottom-4 w-80 z-30">
+        <div className="hidden sm:block fixed right-4 top-36 bottom-4 w-80 z-30">
           <AnnotationList
             annotations={annotations}
             onDeleteAnnotation={onDeleteAnnotation}

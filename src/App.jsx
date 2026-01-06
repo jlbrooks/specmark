@@ -6,6 +6,9 @@ import { decodeMarkdownFromUrl } from './utils/markdownShare'
 import { parseShareErrorResponse, parseShareNetworkError } from './utils/shareErrors'
 import { trackEvent } from './utils/analytics'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
+import { X, Eraser, Copy } from 'lucide-react'
 
 const SAMPLE_MARKDOWN = `# Project Specification
 
@@ -361,13 +364,8 @@ function App() {
   }
 
   const handleBackToEdit = () => {
+    // Preserve share code when switching to Edit (spm-6mv.4.3)
     navigateToView('input')
-    // Clear share code when going back to edit (user is now working with local content)
-    if (shareCode) {
-      setShareCode(null)
-      // Update URL to remove the code param
-      updateUrlParams({ c: null }, { replace: true })
-    }
   }
 
   const handleAddAnnotation = (annotation) => {
@@ -431,30 +429,216 @@ function App() {
     )
   }
 
+  // State for share code input in header
+  const [codeInput, setCodeInput] = useState('')
+  const [codeInputError, setCodeInputError] = useState('')
+
+  const handleLoadCode = (e) => {
+    e.preventDefault()
+    const code = codeInput.trim().toUpperCase()
+
+    if (!code) {
+      setCodeInputError('Please enter a code')
+      return
+    }
+
+    // Basic validation - 6 alphanumeric characters
+    if (!/^[2-9A-HJKMNP-Z]{6}$/i.test(code)) {
+      setCodeInputError('Invalid code format')
+      return
+    }
+
+    setCodeInputError('')
+    handleLoadShareCode(code)
+    setCodeInput('')
+  }
+
   return (
-    <div className="min-h-screen bg-muted/30">
-      {currentView === 'input' ? (
-        <InputView
-          content={markdownContent}
-          onChange={setMarkdownContent}
-          onStartAnnotating={handleStartAnnotating}
-          onLoadShareCode={handleLoadShareCode}
-          error={shareLoadError?.message}
-        />
-      ) : (
-        <AnnotationView
-          content={markdownContent}
-          annotations={annotations}
-          onAddAnnotation={handleAddAnnotation}
-          onUpdateAnnotation={(id, updates) => {
-            setAnnotations((prev) => prev.map((annotation) => (
-              annotation.id === id ? { ...annotation, ...updates } : annotation
-            )))
-          }}
-          onDeleteAnnotation={handleDeleteAnnotation}
-          onClearAnnotations={handleClearAnnotations}
-          onBackToEdit={handleBackToEdit}
-        />
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Shared Header */}
+      <header className="border-b border-border px-4 sm:px-6 py-4">
+        <div className="flex items-center justify-between gap-4">
+          {/* Logo */}
+          <h1 className="text-xl font-medium text-black">Specmark</h1>
+
+          {/* Right side: Docs, share code input, Load button */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Button asChild variant="outline" size="sm">
+              <a href="/docs">Docs</a>
+            </Button>
+
+            {/* Share code input - hidden on mobile */}
+            <form onSubmit={handleLoadCode} className="hidden sm:flex items-center gap-2">
+              <div className="relative">
+                <Input
+                  type="text"
+                  value={codeInput}
+                  onChange={(e) => {
+                    setCodeInput(e.target.value.toUpperCase())
+                    setCodeInputError('')
+                  }}
+                  placeholder="Enter share code"
+                  maxLength={6}
+                  className={cn(
+                    'w-36 uppercase font-mono text-sm',
+                    codeInput && 'pr-8',
+                    codeInputError && 'border-destructive focus-visible:ring-destructive'
+                  )}
+                />
+                {codeInput && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCodeInput('')
+                      setCodeInputError('')
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Clear input"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              <Button type="submit" size="sm">
+                Load
+              </Button>
+            </form>
+          </div>
+        </div>
+
+        {/* Mobile share code input */}
+        <form onSubmit={handleLoadCode} className="sm:hidden mt-3 flex items-center gap-2">
+          <div className="relative flex-1">
+            <Input
+              type="text"
+              value={codeInput}
+              onChange={(e) => {
+                setCodeInput(e.target.value.toUpperCase())
+                setCodeInputError('')
+              }}
+              placeholder="Enter share code"
+              maxLength={6}
+              className={cn(
+                'w-full uppercase font-mono text-sm',
+                codeInput && 'pr-8',
+                codeInputError && 'border-destructive focus-visible:ring-destructive'
+              )}
+            />
+            {codeInput && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCodeInput('')
+                  setCodeInputError('')
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Clear input"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <Button type="submit" size="sm">
+            Load
+          </Button>
+        </form>
+
+        {codeInputError && (
+          <p className="mt-1 text-xs text-destructive">{codeInputError}</p>
+        )}
+      </header>
+
+      {/* Mode Toggle + Action Buttons Row */}
+      <div className="border-b border-border px-4 sm:px-6 py-3 flex items-center justify-between">
+        {/* Mode Toggle */}
+        <div className="inline-flex rounded-lg border border-border p-0.5 bg-background">
+          <button
+            onClick={() => navigateToView('input')}
+            className={cn(
+              'px-4 py-1.5 text-sm font-medium rounded-md transition-colors',
+              currentView === 'input'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            Edit
+          </button>
+          <button
+            onClick={() => markdownContent.trim() && navigateToView('annotate')}
+            disabled={!markdownContent.trim()}
+            className={cn(
+              'px-4 py-1.5 text-sm font-medium rounded-md transition-colors',
+              currentView === 'annotate'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed'
+            )}
+          >
+            Review
+          </button>
+        </div>
+
+        {/* Action Button (context-dependent) */}
+        <div>
+          {currentView === 'input' ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setMarkdownContent('')}
+              disabled={!markdownContent.trim()}
+              className="gap-2"
+            >
+              <Eraser className="h-4 w-4" />
+              <span className="hidden sm:inline">Clear markdown</span>
+              <span className="sm:hidden">Clear</span>
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                // This will be handled by AnnotationView's copy function
+                // We'll emit a custom event or pass a ref
+                window.dispatchEvent(new CustomEvent('specmark:copy-comments'))
+              }}
+              disabled={annotations.length === 0}
+              className="gap-2"
+            >
+              <Copy className="h-4 w-4" />
+              <span className="hidden sm:inline">Copy comments</span>
+              <span className="sm:hidden">Copy</span>
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {currentView === 'input' ? (
+          <InputView
+            content={markdownContent}
+            onChange={setMarkdownContent}
+          />
+        ) : (
+          <AnnotationView
+            content={markdownContent}
+            annotations={annotations}
+            onAddAnnotation={handleAddAnnotation}
+            onUpdateAnnotation={(id, updates) => {
+              setAnnotations((prev) => prev.map((annotation) => (
+                annotation.id === id ? { ...annotation, ...updates } : annotation
+              )))
+            }}
+            onDeleteAnnotation={handleDeleteAnnotation}
+            onClearAnnotations={handleClearAnnotations}
+          />
+        )}
+      </div>
+
+      {/* Error toast */}
+      {shareLoadError?.message && shareLoadOrigin === 'manual' && (
+        <div className="fixed bottom-4 right-4 bg-destructive/10 border border-destructive/40 text-destructive px-4 py-3 rounded-lg shadow-lg">
+          {shareLoadError.message}
+        </div>
       )}
     </div>
   )
