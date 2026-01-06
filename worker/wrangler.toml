@@ -1,7 +1,6 @@
 name = "specmark-api"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
-account_id = "3ad44b235fdbcd9a5efc97023991b314"
 
 # KV Namespaces
 # For local dev, wrangler uses a local emulator
@@ -17,9 +16,4 @@ FRONTEND_URL = "http://localhost:5173"
 
 # Production environment
 [env.production]
-[[env.production.kv_namespaces]]
-binding = "SHARES"
-id = "bb6cb5603b7a498d9c8523d5c11048db"
-
-[env.production.vars]
-FRONTEND_URL = "https://specmark.dev"
+vars = { FRONTEND_URL = "https://specmark.dev" }

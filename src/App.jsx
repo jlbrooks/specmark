@@ -3,9 +3,6 @@ import InputView from './components/InputView'
 import AnnotationView from './components/AnnotationView'
 import { API_URL } from './config'
 import { decodeMarkdownFromUrl } from './utils/markdownShare'
-import { parseShareErrorResponse, parseShareNetworkError } from './utils/shareErrors'
-import { trackEvent } from './utils/analytics'
-import { Button } from '@/components/ui/button'
 
 const SAMPLE_MARKDOWN = `# Project Specification
 
@@ -79,85 +76,6 @@ function normalizeView(view) {
   return view === 'annotate' ? 'annotate' : 'input'
 }
 
-function getInitialState() {
-  if (typeof window === 'undefined') {
-    return {
-      markdown: SAMPLE_MARKDOWN,
-      annotations: [],
-      view: 'input',
-      shareCode: null,
-      pendingShareCode: null,
-      fromSession: false,
-      source: 'default',
-    }
-  }
-
-  const params = new URLSearchParams(window.location.search)
-  const view = normalizeView(params.get('view'))
-  const code = params.get('c')
-
-  if (code) {
-    return {
-      markdown: '',
-      annotations: [],
-      view: 'input',
-      shareCode: null,
-      pendingShareCode: code,
-      fromSession: false,
-      source: 'share',
-    }
-  }
-
-  const base64Markdown = params.get('markdown')
-  if (base64Markdown) {
-    return {
-      markdown: decodeMarkdownFromUrl(base64Markdown),
-      annotations: [],
-      view,
-      shareCode: null,
-      pendingShareCode: null,
-      fromSession: false,
-      source: 'url',
-    }
-  }
-
-  const urlMarkdown = params.get('md')
-  if (urlMarkdown) {
-    return {
-      markdown: urlMarkdown,
-      annotations: [],
-      view,
-      shareCode: null,
-      pendingShareCode: null,
-      fromSession: false,
-      source: 'url',
-    }
-  }
-
-  const session = readSessionStorage()
-  if (session) {
-    return {
-      markdown: session.markdown,
-      annotations: Array.isArray(session.annotations) ? session.annotations : [],
-      view: normalizeView(session.view),
-      shareCode: session.shareCode || null,
-      pendingShareCode: null,
-      fromSession: true,
-      source: 'session',
-    }
-  }
-
-  return {
-    markdown: SAMPLE_MARKDOWN,
-    annotations: [],
-    view,
-    shareCode: null,
-    pendingShareCode: null,
-    fromSession: false,
-    source: 'default',
-  }
-}
-
 function readSessionStorage() {
   try {
     const stored = localStorage.getItem(SESSION_STORAGE_KEY)
@@ -184,17 +102,13 @@ function writeSessionStorage(payload) {
 }
 
 function App() {
-  const initialState = getInitialState()
-  const initialStateRef = useRef(initialState)
-  const initialSourceRef = useRef(initialState.source)
-  const [markdownContent, setMarkdownContent] = useState(initialState.markdown)
-  const [annotations, setAnnotations] = useState(initialState.annotations)
-  const [currentView, setCurrentView] = useState(initialState.view) // 'input' or 'annotate'
-  const [shareCode, setShareCode] = useState(initialState.shareCode) // Track if viewing shared content
-  const [loading, setLoading] = useState(initialState.source === 'share')
-  const [shareLoadError, setShareLoadError] = useState(null)
-  const [shareLoadOrigin, setShareLoadOrigin] = useState(null)
-  const sessionRestoredRef = useRef(initialState.fromSession)
+  const [markdownContent, setMarkdownContent] = useState(SAMPLE_MARKDOWN)
+  const [annotations, setAnnotations] = useState([])
+  const [currentView, setCurrentView] = useState('input') // 'input' or 'annotate'
+  const [shareCode, setShareCode] = useState(null) // Track if viewing shared content
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const sessionRestoredRef = useRef(false)
 
   const getViewFromUrl = useCallback(() => {
     const params = new URLSearchParams(window.location.search)
@@ -232,69 +146,65 @@ function App() {
   }
 
   // Fetch shared content by code
-  const fetchSharedContent = useCallback(async (code, { origin = 'manual' } = {}) => {
+  const fetchSharedContent = useCallback(async (code) => {
     setLoading(true)
-    setShareLoadError(null)
-    setShareLoadOrigin(origin)
+    setError(null)
     try {
       const response = await fetch(`${API_URL}/api/share/${code}`)
-      let data = null
-      try {
-        data = await response.json()
-      } catch {
-        data = null
-      }
+      const data = await response.json()
 
       if (!response.ok) {
-        const errorInfo = parseShareErrorResponse({ data, status: response.status, context: 'load' })
-        throw Object.assign(new Error(errorInfo.message), { code: errorInfo.code })
-      }
-      if (!data?.markdown || typeof data.markdown !== 'string') {
-        throw Object.assign(new Error('Unexpected response from share service.'), { code: 'server_error' })
+        throw new Error(data.message || 'Failed to load shared content')
       }
 
       setMarkdownContent(data.markdown)
       setShareCode(code.toUpperCase())
-      setShareLoadError(null)
-      setShareLoadOrigin(null)
-      trackEvent('Share Load')
       navigateToView('annotate')
     } catch (err) {
-      const errorInfo = err?.code
-        ? { code: err.code, message: err.message }
-        : parseShareNetworkError('load')
-      setShareLoadError(errorInfo)
+      setError(err.message)
       setShareCode(null)
-      if (origin === 'manual') {
-        const url = new URL(window.location.href)
-        url.searchParams.delete('c')
-        window.history.replaceState({}, '', url)
-      }
     } finally {
       setLoading(false)
     }
   }, [navigateToView])
 
-  useEffect(() => {
-    if (!shareLoadError || shareLoadOrigin !== 'manual') return undefined
-    const timeoutId = window.setTimeout(() => {
-      setShareLoadError(null)
-      setShareLoadOrigin(null)
-    }, 4000)
-    return () => window.clearTimeout(timeoutId)
-  }, [shareLoadError, shareLoadOrigin])
-
+  // Load markdown from URL query parameter on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    if (initialSourceRef.current === 'session') {
-      updateUrlParams({ view: initialStateRef.current.view }, { replace: true })
-    } else if (!params.get('view')) {
+    if (!params.get('view')) {
       updateUrlParams({ view: 'input' }, { replace: true })
     }
 
+    // ?c= takes precedence (share code)
     const code = params.get('c')
     if (code) {
-      fetchSharedContent(code, { origin: 'link' })
+      fetchSharedContent(code)
+      return
+    }
+
+    // Fallback to legacy base64/URL encoded markdown
+    const base64Markdown = params.get('markdown')
+    if (base64Markdown) {
+      const decoded = decodeMarkdownFromUrl(base64Markdown)
+      setMarkdownContent(decoded)
+      return
+    }
+
+    const urlMarkdown = params.get('md')
+    if (urlMarkdown) {
+      setMarkdownContent(urlMarkdown)
+      return
+    }
+
+    const session = readSessionStorage()
+    if (session) {
+      sessionRestoredRef.current = true
+      setMarkdownContent(session.markdown)
+      setAnnotations(Array.isArray(session.annotations) ? session.annotations : [])
+      setShareCode(session.shareCode || null)
+      const restoredView = normalizeView(session.view)
+      setCurrentView(restoredView)
+      updateUrlParams({ view: restoredView }, { replace: true })
     }
   }, [fetchSharedContent, updateUrlParams])
 
@@ -389,7 +299,7 @@ function App() {
   }
 
   const handleLoadShareCode = (code) => {
-    fetchSharedContent(code, { origin: 'manual' })
+    fetchSharedContent(code)
     // Update URL to reflect the share code
     updateUrlParams({ c: code.toUpperCase() }, { replace: true })
   }
@@ -397,49 +307,48 @@ function App() {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading shared document...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading shared document...</p>
         </div>
       </div>
     )
   }
 
   // Error state (for share code errors)
-  if (shareLoadError && shareLoadOrigin === 'link') {
+  if (error && !markdownContent) {
     return (
-      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center max-w-md mx-auto p-6">
-          <div className="text-destructive text-5xl mb-4">!</div>
-          <h1 className="text-xl font-semibold text-foreground mb-2">Could not load shared document</h1>
-          <p className="text-muted-foreground mb-6">{shareLoadError.message}</p>
-          <p className="text-sm text-muted-foreground mb-6">Check the 6-character code or start a fresh session.</p>
-          <Button
+          <div className="text-red-500 text-5xl mb-4">!</div>
+          <h1 className="text-xl font-semibold text-gray-900 mb-2">Could not load shared document</h1>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
             onClick={() => {
-              setShareLoadError(null)
-              setShareLoadOrigin(null)
+              setError(null)
               const url = new URL(window.location.href)
               url.searchParams.delete('c')
               window.history.replaceState({}, '', url)
             }}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
           >
             Start Fresh
-          </Button>
+          </button>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="min-h-screen bg-gray-50">
       {currentView === 'input' ? (
         <InputView
           content={markdownContent}
           onChange={setMarkdownContent}
           onStartAnnotating={handleStartAnnotating}
           onLoadShareCode={handleLoadShareCode}
-          error={shareLoadError?.message}
+          error={error}
         />
       ) : (
         <AnnotationView
