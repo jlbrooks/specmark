@@ -15,7 +15,7 @@ export default function DocsView() {
           <div className="min-w-0">
             <h1 className="text-xl sm:text-2xl font-bold text-foreground">Specmark Documentation</h1>
             <p className="text-sm text-muted-foreground mt-1 hidden sm:block">
-              Collect feedback on Markdown specs and documents.
+              Give precise feedback to AI agents on their Markdown output.
             </p>
           </div>
           <Button asChild variant="outline" size="sm">
@@ -31,9 +31,10 @@ export default function DocsView() {
           <Card>
             <CardContent className="pt-6">
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Specmark is a lightweight tool for collecting inline feedback on Markdown documents.
-                Paste or share a spec, select text to annotate, and export comments as structured feedback.
-                Perfect for design docs, RFCs, technical specifications, and any document that needs review.
+                Specmark helps you give precise, contextual feedback to AI agents. When an LLM generates a spec,
+                design doc, or any Markdown content, paste it into Specmark to annotate specific sections with your feedback.
+                Then copy the structured comments back to your AI conversation. No more vague instructions like
+                "fix the third paragraph" — your feedback references the exact text.
               </p>
             </CardContent>
           </Card>
@@ -41,48 +42,37 @@ export default function DocsView() {
 
         {/* How to use */}
         <section>
-          <h2 className="text-xl font-semibold text-foreground mb-4">How to use</h2>
-          <div className="grid gap-4 md:grid-cols-2">
+          <h2 className="text-xl font-semibold text-foreground mb-4">Workflow</h2>
+          <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">1. Add your Markdown</CardTitle>
+                <CardTitle className="text-base">1. Paste Markdown</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  In <strong>Edit</strong> mode, paste your Markdown content or load a shared document using a 6-character share code.
+                  Copy the Markdown output from your AI agent and paste it in <strong>Edit</strong> mode. Or use a share code from the CLI.
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">2. Review and annotate</CardTitle>
+                <CardTitle className="text-base">2. Annotate</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  Switch to <strong>Review</strong> mode, select any text, and add your feedback. Annotations are highlighted and saved locally.
+                  Switch to <strong>Review</strong> mode and select text to add feedback. Each annotation captures the exact text you're commenting on.
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">3. Export feedback</CardTitle>
+                <CardTitle className="text-base">3. Copy to AI</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  Click <strong>Copy comments</strong> to export all annotations as formatted text, ready to paste into a PR, doc, or message.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">4. Share with others</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Use the CLI to upload a Markdown file and get a share code. Others can load it with the code to add their own feedback.
+                  Click <strong>Copy comments</strong> and paste the structured feedback back into your AI conversation for precise revisions.
                 </p>
               </CardContent>
             </Card>
@@ -91,7 +81,10 @@ export default function DocsView() {
 
         {/* CLI Section */}
         <section>
-          <h2 className="text-xl font-semibold text-foreground mb-4">Command Line Interface</h2>
+          <h2 className="text-xl font-semibold text-foreground mb-4">CLI (Optional)</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            For longer documents, use the CLI to upload Markdown files and get a share code you can load in the app.
+          </p>
 
           <Card>
             <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
