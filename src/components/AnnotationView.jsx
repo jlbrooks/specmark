@@ -1,7 +1,35 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import CommentDialog from './CommentDialog'
 import AnnotationList from './AnnotationList'
+import { trackEvent } from '../utils/analytics'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
+
+const FEEDBACK_SETTINGS_KEY = 'markdown_annotator_feedback_settings_v1'
+const DEFAULT_FEEDBACK_SETTINGS = {
+  header: '## Feedback\n\nGenerated with Specmark',
+  includeLineNumbers: false,
+}
+
+function readFeedbackSettings() {
+  if (typeof window === 'undefined') return DEFAULT_FEEDBACK_SETTINGS
+  try {
+    const stored = localStorage.getItem(FEEDBACK_SETTINGS_KEY)
+    if (!stored) return DEFAULT_FEEDBACK_SETTINGS
+    const parsed = JSON.parse(stored)
+    return {
+      header: typeof parsed?.header === 'string' ? parsed.header : DEFAULT_FEEDBACK_SETTINGS.header,
+      includeLineNumbers: Boolean(parsed?.includeLineNumbers),
+    }
+  } catch (err) {
+    console.warn('Failed to read feedback settings:', err)
+    return DEFAULT_FEEDBACK_SETTINGS
+  }
+}
 
 export default function AnnotationView({
   content,
@@ -10,7 +38,6 @@ export default function AnnotationView({
   onUpdateAnnotation,
   onDeleteAnnotation,
   onClearAnnotations,
-  onBackToEdit,
 }) {
   const [showCommentDialog, setShowCommentDialog] = useState(false)
   const [showTooltip, setShowTooltip] = useState(false)
@@ -27,6 +54,8 @@ export default function AnnotationView({
     if (typeof window === 'undefined') return true
     return window.matchMedia('(min-width: 768px)').matches
   })
+  const [exportSettings, setExportSettings] = useState(() => readFeedbackSettings())
+  const [returnFocusElement, setReturnFocusElement] = useState(null)
   const highlightRefs = useRef([])
   const contentRef = useRef(null)
   const selectionRangeRef = useRef(null)
@@ -38,6 +67,24 @@ export default function AnnotationView({
 
   const isMobile = typeof window !== 'undefined'
     && window.matchMedia('(max-width: 640px)').matches
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      localStorage.setItem(FEEDBACK_SETTINGS_KEY, JSON.stringify(exportSettings))
+    } catch (err) {
+      console.warn('Failed to save feedback settings:', err)
+    }
+  }, [exportSettings])
+
+  // Listen for copy-comments event from App.jsx header button
+  useEffect(() => {
+    const handleCopyEvent = () => {
+      handleCopyFeedback()
+    }
+    window.addEventListener('specmark:copy-comments', handleCopyEvent)
+    return () => window.removeEventListener('specmark:copy-comments', handleCopyEvent)
+  }, [annotations, exportSettings])
 
   // Highlight existing annotations in the content
   useEffect(() => {
@@ -84,6 +131,7 @@ export default function AnnotationView({
       event.stopPropagation()
 
       const rect = mark.getBoundingClientRect()
+      setReturnFocusElement(contentRef.current)
       setEditingAnnotationId(annotation.id)
       setSelectedText(annotation.selectedText)
       setSelectionPosition({
@@ -113,10 +161,11 @@ export default function AnnotationView({
     highlightRefs.current = []
   }, [])
 
-  const handleTooltipClick = useCallback(() => {
+  const handleTooltipClick = useCallback((event) => {
     if (openingDialogRef.current || showCommentDialog) return
     // Mark that we're opening the dialog (prevents selectionchange from clearing state)
     openingDialogRef.current = true
+    setReturnFocusElement(event?.currentTarget || contentRef.current)
 
     // Create highlight from stored range
     if (selectionRangeRef.current && contentRef.current) {
@@ -145,7 +194,7 @@ export default function AnnotationView({
   const handleTooltipPress = useCallback((event) => {
     event.preventDefault()
     event.stopPropagation()
-    handleTooltipClick()
+    handleTooltipClick(event)
   }, [handleTooltipClick])
 
   // Listen for selection changes to show tooltip
@@ -228,7 +277,8 @@ export default function AnnotationView({
     setEditingAnnotationId(null)
   }
 
-  const handleEditFromList = (annotation, rect) => {
+  const handleEditFromList = (annotation, rect, triggerElement) => {
+    setReturnFocusElement(triggerElement || contentRef.current)
     setEditingAnnotationId(annotation.id)
     setSelectedText(annotation.selectedText)
     setSelectionPosition({
@@ -279,7 +329,12 @@ export default function AnnotationView({
   const handleCopyFeedback = async () => {
     if (annotations.length === 0) return
 
-    const feedback = generateFeedbackText(annotations)
+    const feedback = generateFeedbackText(annotations, {
+      header: exportSettings.header,
+      includeLineNumbers: exportSettings.includeLineNumbers,
+      sourceText: contentRef.current?.textContent || '',
+    })
+    trackEvent('Copy All', { annotations: annotations.length })
 
     try {
       await navigator.clipboard.writeText(feedback)
@@ -297,76 +352,36 @@ export default function AnnotationView({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Floating toolbar */}
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-40 bg-white rounded-full shadow-lg border border-gray-200 px-2 py-1.5 flex flex-wrap items-center justify-center gap-1 max-w-[calc(100vw-2rem)]">
-        <button
-          onClick={onBackToEdit}
-          className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
-        >
-          ← Edit
-        </button>
-
-        <div className="w-px h-5 bg-gray-200" />
-
-        <button
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Floating toggle for annotations panel (mobile has different UI) */}
+      <div className="sm:hidden fixed bottom-4 right-4 z-40">
+        <Button
           onClick={() => setShowAnnotations(!showAnnotations)}
-          className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors flex items-center gap-1.5 ${
-            showAnnotations ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-          }`}
+          variant={showAnnotations ? 'secondary' : 'default'}
+          size="icon"
+          className="rounded-full shadow-lg h-12 w-12"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
           </svg>
           {annotations.length > 0 && (
-            <span className="bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+            <Badge variant="destructive" className="absolute -top-1 -right-1 h-5 w-5 justify-center rounded-full px-0 text-[10px]">
               {annotations.length}
-            </span>
+            </Badge>
           )}
-        </button>
-
-        <div className="w-px h-5 bg-gray-200" />
-
-        <button
-          onClick={handleCopyFeedback}
-          disabled={annotations.length === 0}
-          className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
-        >
-          {copySuccess ? (
-            <>
-              <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Copied
-            </>
-          ) : copyError ? (
-            <>
-              <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              Failed
-            </>
-          ) : (
-            <>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              Copy All
-            </>
-          )}
-        </button>
+        </Button>
       </div>
 
       {/* Hint text */}
       <div
-        className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-40 text-sm text-gray-400 pointer-events-none text-center px-4 ${
+        className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-40 text-sm text-muted-foreground pointer-events-none text-center px-4 ${
           (showTooltip || showCommentDialog) && isMobile ? 'opacity-0' : ''
         }`}
       >
         <span className="hidden sm:inline">Select text to add feedback</span>
         <span className="sm:hidden">Long-press to select, tap + to comment</span>
       </div>
-      <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-40 text-[11px] text-gray-400 pointer-events-none text-center px-4">
+      <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-40 text-[11px] text-muted-foreground pointer-events-none text-center px-4">
         <span className="inline-flex items-center gap-2">
           <span className="w-6 h-3 rounded-sm annotation-mark annotation-mark-multi" aria-hidden="true" />
           Overlapping comments
@@ -374,24 +389,40 @@ export default function AnnotationView({
       </div>
 
       {/* Main content */}
-      <div className="max-w-3xl mx-auto px-6 py-20">
+      <div className="flex-1 overflow-auto">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <div
           ref={contentRef}
-          className="annotation-content bg-white rounded-xl shadow-sm border border-gray-200 p-8 md:p-12 prose prose-slate max-w-none"
+          tabIndex={-1}
+          className="annotation-content bg-card text-card-foreground rounded-xl shadow-sm border border-border p-8 md:p-12 prose prose-slate max-w-none"
           onContextMenu={(e) => e.preventDefault()}
         >
-          <Markdown>{content}</Markdown>
+          <Markdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              table: ({ ...props }) => (
+                <div className="markdown-table">
+                  <table {...props} />
+                </div>
+              ),
+            }}
+          >
+            {content}
+          </Markdown>
         </div>
       </div>
+      </div>
 
-      {/* Floating annotations panel */}
+      {/* Floating annotations panel - desktop */}
       {showAnnotations && annotations.length > 0 && (
-        <div className="hidden sm:block fixed right-4 top-20 bottom-4 w-80 z-30">
+        <div className="hidden sm:block fixed right-4 top-36 bottom-4 w-80 z-30">
           <AnnotationList
             annotations={annotations}
             onDeleteAnnotation={onDeleteAnnotation}
             onClearAnnotations={onClearAnnotations}
             onEditAnnotation={handleEditFromList}
+            exportSettings={exportSettings}
+            onExportSettingsChange={setExportSettings}
           />
         </div>
       )}
@@ -429,6 +460,8 @@ export default function AnnotationView({
               onDeleteAnnotation={onDeleteAnnotation}
               onClearAnnotations={onClearAnnotations}
               onEditAnnotation={handleEditFromList}
+              exportSettings={exportSettings}
+              onExportSettingsChange={setExportSettings}
               onClose={() => {
                 setShowAnnotations(false)
                 resetSheet()
@@ -444,7 +477,7 @@ export default function AnnotationView({
       {/* Floating tooltip button - positioned above selection */}
       {showTooltip && selectionPosition && (
         <button
-          onClick={handleTooltipClick}
+          onClick={(event) => handleTooltipClick(event)}
           onPointerDown={handleTooltipPress}
           onTouchStart={handleTooltipPress}
           onMouseDown={handleTooltipPress}
@@ -457,7 +490,7 @@ export default function AnnotationView({
             bottom: isMobile ? 'calc(env(safe-area-inset-bottom, 0px) + 72px)' : 'auto',
             transform: isMobile ? 'translateX(-50%)' : 'none',
           }}
-          className="z-50 w-10 h-10 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-full shadow-lg flex items-center justify-center transition-colors touch-manipulation select-none"
+          className="z-50 w-10 h-10 bg-primary text-primary-foreground rounded-full shadow-lg flex items-center justify-center transition-colors hover:bg-primary/90 touch-manipulation select-none"
           aria-label="Add comment"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -476,51 +509,120 @@ export default function AnnotationView({
           onCancel={handleCancelComment}
           initialComment={annotations.find((item) => item.id === editingAnnotationId)?.comment || ''}
           submitLabel={editingAnnotationId ? 'Save' : 'Add'}
+          returnFocusTo={returnFocusElement}
         />
       )}
 
-      {copyFallbackText && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-gray-900">Copy feedback</h2>
-              <button
-                onClick={() => setCopyFallbackText(null)}
-                className="text-gray-400 hover:text-gray-600"
-                aria-label="Close"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <p className="text-xs text-gray-500 mb-2">Clipboard access failed — copy manually below.</p>
-            <textarea
-              readOnly
-              rows={8}
-              value={copyFallbackText}
-              onFocus={(e) => e.target.select()}
-              className="w-full p-2 text-xs font-mono border border-gray-200 rounded-md bg-gray-50"
-            />
-          </div>
-        </div>
-      )}
+      <Dialog
+        open={Boolean(copyFallbackText)}
+        onOpenChange={(open) => {
+          if (!open) setCopyFallbackText(null)
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Copy feedback</DialogTitle>
+            <DialogDescription>
+              Clipboard access failed — copy manually below.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            readOnly
+            rows={8}
+            value={copyFallbackText || ''}
+            onFocus={(e) => e.target.select()}
+            className="w-full font-mono text-xs"
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
 
-function generateFeedbackText(annotations) {
-  let feedback = '## Feedback\n\n'
+function generateFeedbackText(annotations, { header, includeLineNumbers, sourceText } = {}) {
+  const normalizedHeader = typeof header === 'string' ? header.trim() : ''
+  const textSource = typeof sourceText === 'string' ? sourceText : ''
+  const lineStarts = includeLineNumbers && textSource ? getLineStarts(textSource) : []
+  const lastIndexByText = new Map()
+
+  let feedback = ''
+  if (normalizedHeader) {
+    feedback += `${normalizedHeader}\n\n`
+  }
 
   annotations.forEach((annotation, index) => {
-    feedback += `> ${annotation.selectedText}\n\n`
+    const lineInfo = includeLineNumbers
+      ? getLineInfo(annotation, textSource, lineStarts, lastIndexByText)
+      : null
+    const heading = lineInfo
+      ? `### ${index + 1}. ${lineInfo}`
+      : `### ${index + 1}.`
+
+    feedback += `${heading}\n\n`
+    feedback += `${formatQuotedText(annotation.selectedText)}\n\n`
     feedback += `${annotation.comment}\n\n`
-    if (index < annotations.length - 1) {
-      feedback += '---\n\n'
-    }
   })
 
-  return feedback
+  return feedback.trim() + '\n'
+}
+
+function getLineStarts(text) {
+  const starts = [0]
+  for (let i = 0; i < text.length; i += 1) {
+    if (text[i] === '\n') {
+      starts.push(i + 1)
+    }
+  }
+  return starts
+}
+
+function getLineInfo(annotation, textSource, lineStarts, lastIndexByText) {
+  if (!textSource) return null
+
+  let start = annotation?.range?.start
+  let end = annotation?.range?.end
+
+  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    const selectedText = annotation?.selectedText
+    if (!selectedText) return null
+    const fromIndex = lastIndexByText.get(selectedText) ?? 0
+    const foundIndex = textSource.indexOf(selectedText, fromIndex)
+    if (foundIndex === -1) return null
+    start = foundIndex
+    end = foundIndex + selectedText.length
+    lastIndexByText.set(selectedText, end)
+  }
+
+  const startLine = getLineNumber(lineStarts, start)
+  const endLine = getLineNumber(lineStarts, Math.max(start, end - 1))
+
+  if (!startLine || !endLine) return null
+  if (startLine === endLine) return `Line ${startLine}`
+  return `Lines ${startLine}-${endLine}`
+}
+
+function getLineNumber(lineStarts, offset) {
+  let low = 0
+  let high = lineStarts.length - 1
+  let result = 1
+
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2)
+    const start = lineStarts[mid]
+    if (start <= offset) {
+      result = mid + 1
+      low = mid + 1
+    } else {
+      high = mid - 1
+    }
+  }
+
+  return result
+}
+
+function formatQuotedText(text) {
+  const safeText = typeof text === 'string' ? text : ''
+  return safeText.split('\n').map((line) => `> ${line}`).join('\n')
 }
 
 function wrapRangeInMarks(container, range, className, attributes) {

@@ -3,6 +3,12 @@ import InputView from './components/InputView'
 import AnnotationView from './components/AnnotationView'
 import { API_URL } from './config'
 import { decodeMarkdownFromUrl } from './utils/markdownShare'
+import { parseShareErrorResponse, parseShareNetworkError } from './utils/shareErrors'
+import { trackEvent } from './utils/analytics'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
+import { X, Sparkles, Copy } from 'lucide-react'
 
 const SAMPLE_MARKDOWN = `# Project Specification
 
@@ -76,6 +82,85 @@ function normalizeView(view) {
   return view === 'annotate' ? 'annotate' : 'input'
 }
 
+function getInitialState() {
+  if (typeof window === 'undefined') {
+    return {
+      markdown: SAMPLE_MARKDOWN,
+      annotations: [],
+      view: 'input',
+      shareCode: null,
+      pendingShareCode: null,
+      fromSession: false,
+      source: 'default',
+    }
+  }
+
+  const params = new URLSearchParams(window.location.search)
+  const view = normalizeView(params.get('view'))
+  const code = params.get('c')
+
+  if (code) {
+    return {
+      markdown: '',
+      annotations: [],
+      view: 'input',
+      shareCode: null,
+      pendingShareCode: code,
+      fromSession: false,
+      source: 'share',
+    }
+  }
+
+  const base64Markdown = params.get('markdown')
+  if (base64Markdown) {
+    return {
+      markdown: decodeMarkdownFromUrl(base64Markdown),
+      annotations: [],
+      view,
+      shareCode: null,
+      pendingShareCode: null,
+      fromSession: false,
+      source: 'url',
+    }
+  }
+
+  const urlMarkdown = params.get('md')
+  if (urlMarkdown) {
+    return {
+      markdown: urlMarkdown,
+      annotations: [],
+      view,
+      shareCode: null,
+      pendingShareCode: null,
+      fromSession: false,
+      source: 'url',
+    }
+  }
+
+  const session = readSessionStorage()
+  if (session) {
+    return {
+      markdown: session.markdown,
+      annotations: Array.isArray(session.annotations) ? session.annotations : [],
+      view: normalizeView(session.view),
+      shareCode: session.shareCode || null,
+      pendingShareCode: null,
+      fromSession: true,
+      source: 'session',
+    }
+  }
+
+  return {
+    markdown: SAMPLE_MARKDOWN,
+    annotations: [],
+    view,
+    shareCode: null,
+    pendingShareCode: null,
+    fromSession: false,
+    source: 'default',
+  }
+}
+
 function readSessionStorage() {
   try {
     const stored = localStorage.getItem(SESSION_STORAGE_KEY)
@@ -102,13 +187,17 @@ function writeSessionStorage(payload) {
 }
 
 function App() {
-  const [markdownContent, setMarkdownContent] = useState(SAMPLE_MARKDOWN)
-  const [annotations, setAnnotations] = useState([])
-  const [currentView, setCurrentView] = useState('input') // 'input' or 'annotate'
-  const [shareCode, setShareCode] = useState(null) // Track if viewing shared content
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const sessionRestoredRef = useRef(false)
+  const initialState = getInitialState()
+  const initialStateRef = useRef(initialState)
+  const initialSourceRef = useRef(initialState.source)
+  const [markdownContent, setMarkdownContent] = useState(initialState.markdown)
+  const [annotations, setAnnotations] = useState(initialState.annotations)
+  const [currentView, setCurrentView] = useState(initialState.view) // 'input' or 'annotate'
+  const [shareCode, setShareCode] = useState(initialState.shareCode) // Track if viewing shared content
+  const [loading, setLoading] = useState(initialState.source === 'share')
+  const [shareLoadError, setShareLoadError] = useState(null)
+  const [shareLoadOrigin, setShareLoadOrigin] = useState(null)
+  const sessionRestoredRef = useRef(initialState.fromSession)
 
   const getViewFromUrl = useCallback(() => {
     const params = new URLSearchParams(window.location.search)
@@ -146,65 +235,69 @@ function App() {
   }
 
   // Fetch shared content by code
-  const fetchSharedContent = useCallback(async (code) => {
+  const fetchSharedContent = useCallback(async (code, { origin = 'manual' } = {}) => {
     setLoading(true)
-    setError(null)
+    setShareLoadError(null)
+    setShareLoadOrigin(origin)
     try {
       const response = await fetch(`${API_URL}/api/share/${code}`)
-      const data = await response.json()
+      let data = null
+      try {
+        data = await response.json()
+      } catch {
+        data = null
+      }
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to load shared content')
+        const errorInfo = parseShareErrorResponse({ data, status: response.status, context: 'load' })
+        throw Object.assign(new Error(errorInfo.message), { code: errorInfo.code })
+      }
+      if (!data?.markdown || typeof data.markdown !== 'string') {
+        throw Object.assign(new Error('Unexpected response from share service.'), { code: 'server_error' })
       }
 
       setMarkdownContent(data.markdown)
       setShareCode(code.toUpperCase())
+      setShareLoadError(null)
+      setShareLoadOrigin(null)
+      trackEvent('Share Load')
       navigateToView('annotate')
     } catch (err) {
-      setError(err.message)
+      const errorInfo = err?.code
+        ? { code: err.code, message: err.message }
+        : parseShareNetworkError('load')
+      setShareLoadError(errorInfo)
       setShareCode(null)
+      if (origin === 'manual') {
+        const url = new URL(window.location.href)
+        url.searchParams.delete('c')
+        window.history.replaceState({}, '', url)
+      }
     } finally {
       setLoading(false)
     }
   }, [navigateToView])
 
-  // Load markdown from URL query parameter on mount
+  useEffect(() => {
+    if (!shareLoadError || shareLoadOrigin !== 'manual') return undefined
+    const timeoutId = window.setTimeout(() => {
+      setShareLoadError(null)
+      setShareLoadOrigin(null)
+    }, 4000)
+    return () => window.clearTimeout(timeoutId)
+  }, [shareLoadError, shareLoadOrigin])
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    if (!params.get('view')) {
+    if (initialSourceRef.current === 'session') {
+      updateUrlParams({ view: initialStateRef.current.view }, { replace: true })
+    } else if (!params.get('view')) {
       updateUrlParams({ view: 'input' }, { replace: true })
     }
 
-    // ?c= takes precedence (share code)
     const code = params.get('c')
     if (code) {
-      fetchSharedContent(code)
-      return
-    }
-
-    // Fallback to legacy base64/URL encoded markdown
-    const base64Markdown = params.get('markdown')
-    if (base64Markdown) {
-      const decoded = decodeMarkdownFromUrl(base64Markdown)
-      setMarkdownContent(decoded)
-      return
-    }
-
-    const urlMarkdown = params.get('md')
-    if (urlMarkdown) {
-      setMarkdownContent(urlMarkdown)
-      return
-    }
-
-    const session = readSessionStorage()
-    if (session) {
-      sessionRestoredRef.current = true
-      setMarkdownContent(session.markdown)
-      setAnnotations(Array.isArray(session.annotations) ? session.annotations : [])
-      setShareCode(session.shareCode || null)
-      const restoredView = normalizeView(session.view)
-      setCurrentView(restoredView)
-      updateUrlParams({ view: restoredView }, { replace: true })
+      fetchSharedContent(code, { origin: 'link' })
     }
   }, [fetchSharedContent, updateUrlParams])
 
@@ -271,13 +364,8 @@ function App() {
   }
 
   const handleBackToEdit = () => {
+    // Preserve share code when switching to Edit (spm-6mv.4.3)
     navigateToView('input')
-    // Clear share code when going back to edit (user is now working with local content)
-    if (shareCode) {
-      setShareCode(null)
-      // Update URL to remove the code param
-      updateUrlParams({ c: null }, { replace: true })
-    }
   }
 
   const handleAddAnnotation = (annotation) => {
@@ -299,7 +387,7 @@ function App() {
   }
 
   const handleLoadShareCode = (code) => {
-    fetchSharedContent(code)
+    fetchSharedContent(code, { origin: 'manual' })
     // Update URL to reflect the share code
     updateUrlParams({ c: code.toUpperCase() }, { replace: true })
   }
@@ -307,63 +395,250 @@ function App() {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading shared document...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading shared document...</p>
         </div>
       </div>
     )
   }
 
   // Error state (for share code errors)
-  if (error && !markdownContent) {
+  if (shareLoadError && shareLoadOrigin === 'link') {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
         <div className="text-center max-w-md mx-auto p-6">
-          <div className="text-red-500 text-5xl mb-4">!</div>
-          <h1 className="text-xl font-semibold text-gray-900 mb-2">Could not load shared document</h1>
-          <p className="text-gray-600 mb-6">{error}</p>
-          <button
+          <div className="text-destructive text-5xl mb-4">!</div>
+          <h1 className="text-xl font-semibold text-foreground mb-2">Could not load shared document</h1>
+          <p className="text-muted-foreground mb-6">{shareLoadError.message}</p>
+          <p className="text-sm text-muted-foreground mb-6">Check the 6-character code or start a fresh session.</p>
+          <Button
             onClick={() => {
-              setError(null)
+              setShareLoadError(null)
+              setShareLoadOrigin(null)
               const url = new URL(window.location.href)
               url.searchParams.delete('c')
               window.history.replaceState({}, '', url)
             }}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
           >
             Start Fresh
-          </button>
+          </Button>
         </div>
       </div>
     )
   }
 
+  // State for share code input in header
+  const [codeInput, setCodeInput] = useState('')
+  const [codeInputError, setCodeInputError] = useState('')
+
+  const handleLoadCode = (e) => {
+    e.preventDefault()
+    const code = codeInput.trim().toUpperCase()
+
+    if (!code) {
+      setCodeInputError('Please enter a code')
+      return
+    }
+
+    // Basic validation - 6 alphanumeric characters
+    if (!/^[2-9A-HJKMNP-Z]{6}$/i.test(code)) {
+      setCodeInputError('Invalid code format')
+      return
+    }
+
+    setCodeInputError('')
+    handleLoadShareCode(code)
+    setCodeInput('')
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {currentView === 'input' ? (
-        <InputView
-          content={markdownContent}
-          onChange={setMarkdownContent}
-          onStartAnnotating={handleStartAnnotating}
-          onLoadShareCode={handleLoadShareCode}
-          error={error}
-        />
-      ) : (
-        <AnnotationView
-          content={markdownContent}
-          annotations={annotations}
-          onAddAnnotation={handleAddAnnotation}
-          onUpdateAnnotation={(id, updates) => {
-            setAnnotations((prev) => prev.map((annotation) => (
-              annotation.id === id ? { ...annotation, ...updates } : annotation
-            )))
-          }}
-          onDeleteAnnotation={handleDeleteAnnotation}
-          onClearAnnotations={handleClearAnnotations}
-          onBackToEdit={handleBackToEdit}
-        />
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Shared Header */}
+      <header className="border-b border-border px-4 sm:px-6 py-4">
+        <div className="flex items-center justify-between gap-4">
+          {/* Logo */}
+          <h1 className="text-xl font-medium text-black">Specmark</h1>
+
+          {/* Right side: Docs, share code input, Load button */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Button asChild variant="outline" size="sm">
+              <a href="/docs">Docs</a>
+            </Button>
+
+            {/* Share code input - hidden on mobile */}
+            <form onSubmit={handleLoadCode} className="hidden sm:flex items-center gap-2">
+              <div className="relative">
+                <Input
+                  type="text"
+                  value={codeInput}
+                  onChange={(e) => {
+                    setCodeInput(e.target.value.toUpperCase())
+                    setCodeInputError('')
+                  }}
+                  placeholder="Enter share code"
+                  maxLength={6}
+                  className={cn(
+                    'w-44 font-mono text-sm',
+                    codeInput && 'pr-8',
+                    codeInputError && 'border-destructive focus-visible:ring-destructive'
+                  )}
+                />
+                {codeInput && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCodeInput('')
+                      setCodeInputError('')
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Clear input"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              <Button type="submit" size="sm">
+                Load file
+              </Button>
+            </form>
+          </div>
+        </div>
+
+        {/* Mobile share code input */}
+        <form onSubmit={handleLoadCode} className="sm:hidden mt-3 flex items-center gap-2">
+          <div className="relative flex-1">
+            <Input
+              type="text"
+              value={codeInput}
+              onChange={(e) => {
+                setCodeInput(e.target.value.toUpperCase())
+                setCodeInputError('')
+              }}
+              placeholder="Enter share code"
+              maxLength={6}
+              className={cn(
+                'w-full font-mono text-sm',
+                codeInput && 'pr-8',
+                codeInputError && 'border-destructive focus-visible:ring-destructive'
+              )}
+            />
+            {codeInput && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCodeInput('')
+                  setCodeInputError('')
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Clear input"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <Button type="submit" size="sm">
+            Load
+          </Button>
+        </form>
+
+        {codeInputError && (
+          <p className="mt-1 text-xs text-destructive">{codeInputError}</p>
+        )}
+      </header>
+
+      {/* Mode Toggle + Action Buttons Row */}
+      <div className="border-b border-border px-4 sm:px-6 py-3 flex items-center justify-between">
+        {/* Mode Toggle */}
+        <div className="inline-flex rounded-full border border-border p-0.5 bg-background">
+          <button
+            onClick={() => navigateToView('input')}
+            className={cn(
+              'px-4 py-1.5 text-sm font-medium rounded-full transition-colors',
+              currentView === 'input'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            Edit
+          </button>
+          <button
+            onClick={() => markdownContent.trim() && navigateToView('annotate')}
+            disabled={!markdownContent.trim()}
+            className={cn(
+              'px-4 py-1.5 text-sm font-medium rounded-full transition-colors',
+              currentView === 'annotate'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed'
+            )}
+          >
+            Review
+          </button>
+        </div>
+
+        {/* Action Button (context-dependent) */}
+        <div>
+          {currentView === 'input' ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setMarkdownContent('')}
+              disabled={!markdownContent.trim()}
+              className="gap-2"
+            >
+              <Sparkles className="h-4 w-4" />
+              <span className="hidden sm:inline">Clear markdown</span>
+              <span className="sm:hidden">Clear</span>
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                // This will be handled by AnnotationView's copy function
+                // We'll emit a custom event or pass a ref
+                window.dispatchEvent(new CustomEvent('specmark:copy-comments'))
+              }}
+              disabled={annotations.length === 0}
+              className="gap-2"
+            >
+              <Copy className="h-4 w-4" />
+              <span className="hidden sm:inline">Copy comments</span>
+              <span className="sm:hidden">Copy</span>
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {currentView === 'input' ? (
+          <InputView
+            content={markdownContent}
+            onChange={setMarkdownContent}
+          />
+        ) : (
+          <AnnotationView
+            content={markdownContent}
+            annotations={annotations}
+            onAddAnnotation={handleAddAnnotation}
+            onUpdateAnnotation={(id, updates) => {
+              setAnnotations((prev) => prev.map((annotation) => (
+                annotation.id === id ? { ...annotation, ...updates } : annotation
+              )))
+            }}
+            onDeleteAnnotation={handleDeleteAnnotation}
+            onClearAnnotations={handleClearAnnotations}
+          />
+        )}
+      </div>
+
+      {/* Error toast */}
+      {shareLoadError?.message && shareLoadOrigin === 'manual' && (
+        <div className="fixed bottom-4 right-4 bg-destructive/10 border border-destructive/40 text-destructive px-4 py-3 rounded-lg shadow-lg">
+          {shareLoadError.message}
+        </div>
       )}
     </div>
   )
