@@ -12,6 +12,24 @@ A web application for annotating Markdown specifications with highlights and com
 - **Export**: Copy all feedback as formatted Markdown to clipboard
 - **Persistent Annotations**: Annotations saved to localStorage, keyed by content or share code
 
+## Analytics
+
+Specmark uses **Umami Analytics** for anonymous, privacy-friendly usage tracking. The tracker script is injected at runtime when the following environment variables are set:
+
+- `VITE_UMAMI_SCRIPT_URL` (e.g. `https://analytics.example.com/script.js`)
+- `VITE_UMAMI_WEBSITE_ID` (the Umami website UUID)
+- Optional: `VITE_UMAMI_HOST_URL` (if your script is hosted separately from the collector)
+- Optional: `VITE_UMAMI_DOMAINS` (comma-separated list of allowed domains)
+
+The app records:
+
+- Page views (default Umami behavior)
+- `Share Create` when a share code is successfully created
+- `Share Load` when a share code is successfully retrieved
+- `Copy All` when feedback is copied to the clipboard
+
+No PII or document content is sent with these events.
+
 ## Tech Stack
 
 ### Frontend
@@ -160,12 +178,20 @@ cd worker
 npx wrangler deploy --env production --route "specmark.dev/api/*"
 ```
 
-**Via GitHub Actions:**
+**Via GitHub Actions (Automated):**
 
 1. Create a Cloudflare API token at https://dash.cloudflare.com/profile/api-tokens
-   - Use the "Edit Cloudflare Workers" template
-2. Add the token as a GitHub secret named `CLOUDFLARE_API_TOKEN`
-3. Push to main branch - the worker will auto-deploy
+   - Use the "Edit Cloudflare Workers" template or create custom token with:
+     - Workers Scripts: Edit
+     - Workers KV Storage: Edit
+     - Cloudflare Pages: Edit
+2. Add GitHub secrets at `https://github.com/YOUR_USERNAME/specmark/settings/secrets/actions`:
+   - `CLOUDFLARE_API_TOKEN` - Your Cloudflare API token
+   - `VITE_UMAMI_SCRIPT_URL` - (Optional) Your Umami analytics script URL
+   - `VITE_UMAMI_WEBSITE_ID` - (Optional) Your Umami website ID
+3. Push to main branch:
+   - Worker changes (`worker/**`) trigger worker deployment
+   - Frontend changes (`src/**`, `public/**`) trigger Pages deployment
 
 ### 4. Deploy Frontend to Cloudflare Pages
 

@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 
 export default function CommentDialog({
   selectedText,
@@ -7,9 +9,11 @@ export default function CommentDialog({
   onCancel,
   initialComment = '',
   submitLabel = 'Add',
+  returnFocusTo,
 }) {
   const [comment, setComment] = useState(() => initialComment)
   const textareaRef = useRef(null)
+  const dialogRef = useRef(null)
   const lastSubmitRef = useRef(0)
   const submitButtonRef = useRef(null)
   const submitRef = useRef(null)
@@ -17,6 +21,15 @@ export default function CommentDialog({
   useEffect(() => {
     textareaRef.current?.focus()
   }, [])
+
+  useEffect(() => {
+    const returnTarget = returnFocusTo
+    return () => {
+      if (returnTarget && typeof returnTarget.focus === 'function') {
+        returnTarget.focus()
+      }
+    }
+  }, [returnFocusTo])
 
   useEffect(() => {
     const handleEscape = (e) => {
@@ -82,6 +95,32 @@ export default function CommentDialog({
     }
   }
 
+  const handleDialogKeyDown = (event) => {
+    if (event.key !== 'Tab') return
+    const container = dialogRef.current
+    if (!container) return
+
+    const focusable = Array.from(container.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )).filter((element) => !element.hasAttribute('disabled'))
+
+    if (focusable.length === 0) return
+
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    const active = document.activeElement
+
+    if (event.shiftKey) {
+      if (active === first || !container.contains(active)) {
+        event.preventDefault()
+        last.focus()
+      }
+    } else if (active === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
   // Calculate position - prefer above selection to avoid iOS menu
   const style = {}
   if (position) {
@@ -113,20 +152,22 @@ export default function CommentDialog({
       <div
         role="dialog"
         aria-modal="true"
+        ref={dialogRef}
         style={style}
-        className="fixed z-50 w-80 bg-white rounded-lg shadow-2xl border border-gray-200 overflow-hidden"
+        className="fixed z-50 w-80 bg-card text-card-foreground rounded-lg shadow-2xl border border-border overflow-hidden"
+        onKeyDown={handleDialogKeyDown}
       >
-        <div className="bg-blue-50 border-b border-blue-100 px-3 py-2">
-          <p className="text-xs text-blue-800 truncate" title={selectedText}>
+        <div className="bg-primary/10 border-b border-border px-3 py-2">
+          <p className="text-xs text-primary truncate" title={selectedText}>
             "{selectedText.length > 50 ? selectedText.slice(0, 50) + '...' : selectedText}"
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="p-3">
-          <textarea
+          <Textarea
             ref={textareaRef}
             rows="3"
-            className="w-full p-2 text-sm border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+            className="text-sm resize-none"
             placeholder="Add your feedback..."
             value={comment}
             onChange={(e) => setComment(e.target.value)}
@@ -134,21 +175,22 @@ export default function CommentDialog({
           />
 
           <div className="flex items-center justify-end gap-3 mt-3">
-            <button
+            <Button
               type="button"
               onClick={onCancel}
-              className="px-4 py-2.5 text-sm font-medium text-gray-600 active:text-gray-800"
+              variant="ghost"
+              size="sm"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               ref={submitButtonRef}
               type="button"
               disabled={!comment.trim()}
-              className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg active:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed touch-manipulation"
+              className="touch-manipulation"
             >
               {submitLabel}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

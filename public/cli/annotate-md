@@ -1,0 +1,66 @@
+#!/bin/bash
+# annotate-md - Create a share link for markdown annotation
+#
+# Usage: annotate-md <file.md>
+#
+# Environment variables:
+#   ANNOTATE_API_URL - API endpoint (default: https://specmark.dev)
+
+set -e
+
+API_URL="${ANNOTATE_API_URL:-https://specmark.dev}"
+
+if [ -z "$1" ]; then
+  echo "Usage: annotate-md <file.md>"
+  echo ""
+  echo "Create a shareable link for annotating a markdown file."
+  echo ""
+  echo "Environment variables:"
+  echo "  ANNOTATE_API_URL - API endpoint (default: https://specmark.dev)"
+  exit 1
+fi
+
+if [ ! -f "$1" ]; then
+  echo "Error: File not found: $1"
+  exit 1
+fi
+
+# Check for required tools
+if ! command -v curl &> /dev/null; then
+  echo "Error: curl is required but not installed"
+  exit 1
+fi
+
+if ! command -v jq &> /dev/null; then
+  echo "Error: jq is required but not installed"
+  exit 1
+fi
+
+# Create the share
+RESPONSE=$(curl -s -X POST "${API_URL}/api/share" \
+  -H "Content-Type: text/markdown" \
+  --data-binary @"$1")
+
+# Check for errors
+ERROR=$(echo "$RESPONSE" | jq -r '.error // empty')
+if [ -n "$ERROR" ]; then
+  MESSAGE=$(echo "$RESPONSE" | jq -r '.message')
+  echo "Error: $MESSAGE"
+  exit 1
+fi
+
+# Extract response fields
+CODE=$(echo "$RESPONSE" | jq -r '.code')
+URL=$(echo "$RESPONSE" | jq -r '.url')
+EXPIRES=$(echo "$RESPONSE" | jq -r '.expiresAt')
+
+# Format expiration date
+EXPIRES_FORMATTED=$(date -d "$EXPIRES" "+%Y-%m-%d %H:%M" 2>/dev/null || echo "$EXPIRES")
+
+echo ""
+echo "Share created!"
+echo ""
+echo "URL:     $URL"
+echo "Code:    $CODE"
+echo "Expires: $EXPIRES_FORMATTED"
+echo ""
