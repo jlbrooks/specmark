@@ -480,7 +480,7 @@ function App() {
                   placeholder="Enter share code"
                   maxLength={6}
                   className={cn(
-                    'w-36 font-mono text-sm',
+                    'w-44 font-mono text-sm',
                     codeInput && 'pr-8',
                     codeInputError && 'border-destructive focus-visible:ring-destructive'
                   )}
