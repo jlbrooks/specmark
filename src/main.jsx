@@ -2,16 +2,16 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
-import CliView from './components/CliView.jsx'
+import DocsView from './components/DocsView.jsx'
 import { initAnalytics } from './utils/analytics'
 
 initAnalytics()
 
-const isCliPath = typeof window !== 'undefined'
-  && window.location.pathname.startsWith('/cli')
+const isDocsPath = typeof window !== 'undefined'
+  && window.location.pathname.startsWith('/docs')
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    {isCliPath ? <CliView /> : <App />}
+    {isDocsPath ? <DocsView /> : <App />}
   </StrictMode>,
 )
