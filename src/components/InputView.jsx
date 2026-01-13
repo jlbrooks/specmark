@@ -5,7 +5,7 @@ export default function InputView({ content, onChange }) {
     <div className="flex-1 flex flex-col p-4 sm:p-6">
       {/* Filename display */}
       <div className="mb-2">
-        <span className="text-sm text-muted-foreground font-mono">document.md</span>
+        <span className="text-sm text-muted-foreground font-mono">spec.md</span>
       </div>
 
       {/* Markdown editor */}

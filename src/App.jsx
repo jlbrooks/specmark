@@ -8,7 +8,7 @@ import { trackEvent } from './utils/analytics'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { X, Eraser, Copy } from 'lucide-react'
+import { X, Sparkles, Copy } from 'lucide-react'
 
 const SAMPLE_MARKDOWN = `# Project Specification
 
@@ -480,7 +480,7 @@ function App() {
                   placeholder="Enter share code"
                   maxLength={6}
                   className={cn(
-                    'w-36 uppercase font-mono text-sm',
+                    'w-36 font-mono text-sm',
                     codeInput && 'pr-8',
                     codeInputError && 'border-destructive focus-visible:ring-destructive'
                   )}
@@ -500,7 +500,7 @@ function App() {
                 )}
               </div>
               <Button type="submit" size="sm">
-                Load
+                Load file
               </Button>
             </form>
           </div>
@@ -519,7 +519,7 @@ function App() {
               placeholder="Enter share code"
               maxLength={6}
               className={cn(
-                'w-full uppercase font-mono text-sm',
+                'w-full font-mono text-sm',
                 codeInput && 'pr-8',
                 codeInputError && 'border-destructive focus-visible:ring-destructive'
               )}
@@ -551,11 +551,11 @@ function App() {
       {/* Mode Toggle + Action Buttons Row */}
       <div className="border-b border-border px-4 sm:px-6 py-3 flex items-center justify-between">
         {/* Mode Toggle */}
-        <div className="inline-flex rounded-lg border border-border p-0.5 bg-background">
+        <div className="inline-flex rounded-full border border-border p-0.5 bg-background">
           <button
             onClick={() => navigateToView('input')}
             className={cn(
-              'px-4 py-1.5 text-sm font-medium rounded-md transition-colors',
+              'px-4 py-1.5 text-sm font-medium rounded-full transition-colors',
               currentView === 'input'
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground'
@@ -567,7 +567,7 @@ function App() {
             onClick={() => markdownContent.trim() && navigateToView('annotate')}
             disabled={!markdownContent.trim()}
             className={cn(
-              'px-4 py-1.5 text-sm font-medium rounded-md transition-colors',
+              'px-4 py-1.5 text-sm font-medium rounded-full transition-colors',
               currentView === 'annotate'
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed'
@@ -587,7 +587,7 @@ function App() {
               disabled={!markdownContent.trim()}
               className="gap-2"
             >
-              <Eraser className="h-4 w-4" />
+              <Sparkles className="h-4 w-4" />
               <span className="hidden sm:inline">Clear markdown</span>
               <span className="sm:hidden">Clear</span>
             </Button>
