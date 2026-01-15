@@ -197,6 +197,8 @@ function App() {
   const [loading, setLoading] = useState(initialState.source === 'share')
   const [shareLoadError, setShareLoadError] = useState(null)
   const [shareLoadOrigin, setShareLoadOrigin] = useState(null)
+  const [codeInput, setCodeInput] = useState('')
+  const [codeInputError, setCodeInputError] = useState('')
   const sessionRestoredRef = useRef(initialState.fromSession)
 
   const getViewFromUrl = useCallback(() => {
@@ -357,17 +359,6 @@ function App() {
     return () => window.clearTimeout(timeoutId)
   }, [markdownContent, annotations, currentView, shareCode])
 
-  const handleStartAnnotating = () => {
-    if (markdownContent.trim()) {
-      navigateToView('annotate')
-    }
-  }
-
-  const handleBackToEdit = () => {
-    // Preserve share code when switching to Edit (spm-6mv.4.3)
-    navigateToView('input')
-  }
-
   const handleAddAnnotation = (annotation) => {
     setAnnotations((prev) => [...prev, { ...annotation, id: createAnnotationId() }])
   }
@@ -428,10 +419,6 @@ function App() {
       </div>
     )
   }
-
-  // State for share code input in header
-  const [codeInput, setCodeInput] = useState('')
-  const [codeInputError, setCodeInputError] = useState('')
 
   const handleLoadCode = (e) => {
     e.preventDefault()

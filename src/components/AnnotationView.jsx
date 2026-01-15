@@ -43,8 +43,6 @@ export default function AnnotationView({
   const [showTooltip, setShowTooltip] = useState(false)
   const [selectedText, setSelectedText] = useState('')
   const [selectionPosition, setSelectionPosition] = useState(null)
-  const [copySuccess, setCopySuccess] = useState(false)
-  const [copyError, setCopyError] = useState(false)
   const [copyFallbackText, setCopyFallbackText] = useState(null)
   const [editingAnnotationId, setEditingAnnotationId] = useState(null)
   const [dialogKey, setDialogKey] = useState(0)
@@ -77,6 +75,25 @@ export default function AnnotationView({
     }
   }, [exportSettings])
 
+  const handleCopyFeedback = useCallback(async () => {
+    if (annotations.length === 0) return
+
+    const feedback = generateFeedbackText(annotations, {
+      header: exportSettings.header,
+      includeLineNumbers: exportSettings.includeLineNumbers,
+      sourceText: contentRef.current?.textContent || '',
+    })
+    trackEvent('Copy All', { annotations: annotations.length })
+
+    try {
+      await navigator.clipboard.writeText(feedback)
+      setCopyFallbackText(null)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+      setCopyFallbackText(feedback)
+    }
+  }, [annotations, exportSettings])
+
   // Listen for copy-comments event from App.jsx header button
   useEffect(() => {
     const handleCopyEvent = () => {
@@ -84,7 +101,7 @@ export default function AnnotationView({
     }
     window.addEventListener('specmark:copy-comments', handleCopyEvent)
     return () => window.removeEventListener('specmark:copy-comments', handleCopyEvent)
-  }, [annotations, exportSettings])
+  }, [handleCopyFeedback])
 
   // Highlight existing annotations in the content
   useEffect(() => {
@@ -324,31 +341,6 @@ export default function AnnotationView({
       setShowAnnotations(false)
     }
     resetSheet()
-  }
-
-  const handleCopyFeedback = async () => {
-    if (annotations.length === 0) return
-
-    const feedback = generateFeedbackText(annotations, {
-      header: exportSettings.header,
-      includeLineNumbers: exportSettings.includeLineNumbers,
-      sourceText: contentRef.current?.textContent || '',
-    })
-    trackEvent('Copy All', { annotations: annotations.length })
-
-    try {
-      await navigator.clipboard.writeText(feedback)
-      setCopySuccess(true)
-      setCopyError(false)
-      setCopyFallbackText(null)
-      setTimeout(() => setCopySuccess(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy:', err)
-      setCopyError(true)
-      setCopySuccess(false)
-      setCopyFallbackText(feedback)
-      setTimeout(() => setCopyError(false), 3000)
-    }
   }
 
   return (
