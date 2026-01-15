@@ -34,7 +34,7 @@ export default function CliView() {
               </CardDescription>
             </div>
             <Button asChild>
-              <a href="https://raw.githubusercontent.com/jlbrooks/specmark/main/cli/annotate-md">
+              <a href="https://raw.githubusercontent.com/jlbrooks/specmark/main/cli/specmark">
                 Download script
               </a>
             </Button>
@@ -42,8 +42,8 @@ export default function CliView() {
           <CardContent>
             <pre className="bg-gray-900 text-gray-100 text-xs rounded-lg p-4 overflow-x-auto">
               <code>{`mkdir -p ~/.local/bin
-curl -fsSL https://raw.githubusercontent.com/jlbrooks/specmark/main/cli/annotate-md -o ~/.local/bin/annotate-md
-chmod +x ~/.local/bin/annotate-md`}</code>
+curl -fsSL https://raw.githubusercontent.com/jlbrooks/specmark/main/cli/specmark -o ~/.local/bin/specmark
+chmod +x ~/.local/bin/specmark`}</code>
             </pre>
             <p className="mt-3 text-xs text-muted-foreground">
               Requirements: bash, curl, jq
@@ -58,7 +58,7 @@ chmod +x ~/.local/bin/annotate-md`}</code>
             </CardHeader>
             <CardContent>
               <pre className="bg-gray-900 text-gray-100 text-xs rounded-lg p-4 overflow-x-auto">
-                <code>{`annotate-md ./specs/authentication.md
+                <code>{`specmark ./specs/authentication.md
 # URL + code printed to stdout`}</code>
               </pre>
             </CardContent>
@@ -70,8 +70,8 @@ chmod +x ~/.local/bin/annotate-md`}</code>
             </CardHeader>
             <CardContent>
               <pre className="bg-gray-900 text-gray-100 text-xs rounded-lg p-4 overflow-x-auto">
-                <code>{`export ANNOTATE_API_URL=https://specmark.dev
-annotate-md ./specs/authentication.md`}</code>
+                <code>{`export SPECMARK_API_URL=https://specmark.dev
+specmark ./specs/authentication.md`}</code>
               </pre>
             </CardContent>
           </Card>

@@ -182,9 +182,9 @@
 
     <p>Download the script and make it executable:</p>
 
-    <pre><code>curl -fsSL https://specmark.dev/cli/annotate-md -o annotate-md
-chmod +x annotate-md
-sudo mv annotate-md /usr/local/bin/</code></pre>
+    <pre><code>curl -fsSL https://specmark.dev/cli/specmark -o specmark
+chmod +x specmark
+sudo mv specmark /usr/local/bin/</code></pre>
 
     <h3>Requirements</h3>
     <ul>
@@ -194,13 +194,13 @@ sudo mv annotate-md /usr/local/bin/</code></pre>
 
     <h3>Usage</h3>
 
-    <pre><code>annotate-md &lt;file.md&gt;</code></pre>
+    <pre><code>specmark &lt;file.md&gt;</code></pre>
 
     <p>This will upload your markdown file and return a share URL and code.</p>
 
     <h3>Example</h3>
 
-    <pre><code>$ annotate-md spec.md
+    <pre><code>$ specmark spec.md
 
 Share created!
 
@@ -210,7 +210,7 @@ Expires: 2025-01-12 14:30</code></pre>
 
     <h3>Environment Variables</h3>
 
-    <p><code>ANNOTATE_API_URL</code> - Override the API endpoint (default: https://specmark.dev)</p>
+    <p><code>SPECMARK_API_URL</code> - Override the API endpoint (default: https://specmark.dev)</p>
 
     <h2>Tips</h2>
 

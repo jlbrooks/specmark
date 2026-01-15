@@ -1,22 +1,22 @@
 #!/bin/bash
-# annotate-md - Create a share link for markdown annotation
+# specmark - Create a share link for markdown annotation
 #
-# Usage: annotate-md <file.md>
+# Usage: specmark <file.md>
 #
 # Environment variables:
-#   ANNOTATE_API_URL - API endpoint (default: https://specmark.dev)
+#   SPECMARK_API_URL - API endpoint (default: https://specmark.dev)
 
 set -e
 
-API_URL="${ANNOTATE_API_URL:-https://specmark.dev}"
+API_URL="${SPECMARK_API_URL:-https://specmark.dev}"
 
 if [ -z "$1" ]; then
-  echo "Usage: annotate-md <file.md>"
+  echo "Usage: specmark <file.md>"
   echo ""
   echo "Create a shareable link for annotating a markdown file."
   echo ""
   echo "Environment variables:"
-  echo "  ANNOTATE_API_URL - API endpoint (default: https://specmark.dev)"
+  echo "  SPECMARK_API_URL - API endpoint (default: https://specmark.dev)"
   exit 1
 fi
 

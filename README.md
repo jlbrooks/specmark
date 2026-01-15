@@ -56,7 +56,7 @@ specmark/
 │   ├── wrangler.toml       # Worker config
 │   └── package.json
 ├── cli/
-│   └── annotate-md         # CLI tool for creating shares
+│   └── specmark            # CLI tool for creating shares
 ├── specs/                  # Feature specifications
 └── .github/workflows/      # GitHub Actions
 ```
@@ -112,7 +112,7 @@ Create share links directly from your terminal:
 
 ```bash
 # Add to PATH or use directly
-./cli/annotate-md path/to/document.md
+./cli/specmark path/to/document.md
 
 # Output:
 # Share created!
@@ -123,8 +123,8 @@ Create share links directly from your terminal:
 
 For local development:
 ```bash
-export ANNOTATE_API_URL=http://localhost:8787
-./cli/annotate-md document.md
+export SPECMARK_API_URL=http://localhost:8787
+./cli/specmark document.md
 ```
 
 ### Legacy URL Sharing
@@ -248,8 +248,8 @@ To test against production:
 VITE_API_URL=https://specmark.dev npm run dev
 
 # CLI
-export ANNOTATE_API_URL=https://specmark.dev
-./cli/annotate-md document.md
+export SPECMARK_API_URL=https://specmark.dev
+./cli/specmark document.md
 ```
 
 ## API Reference

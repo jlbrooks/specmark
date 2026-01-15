@@ -179,7 +179,7 @@ GET /api/share/{code}
 ┌─────────────────────────────────────────────────────────────┐
 │ Terminal (SSH via Termius)                                  │
 ├─────────────────────────────────────────────────────────────┤
-│ $ annotate-md SPEC.md                                       │
+│ $ specmark SPEC.md                                          │
 │                                                             │
 │ Share created! Expires in 7 days.                           │
 │                                                             │
@@ -215,10 +215,10 @@ Simple shell script using curl:
 
 ```bash
 #!/bin/bash
-# annotate-md - Create a share link for markdown annotation
+# specmark - Create a share link for markdown annotation
 
 if [ -z "$1" ]; then
-  echo "Usage: annotate-md <file.md>"
+  echo "Usage: specmark <file.md>"
   exit 1
 fi
 
