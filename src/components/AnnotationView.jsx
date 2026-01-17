@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, memo } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import CommentDialog from './CommentDialog'
@@ -36,6 +36,23 @@ const DEFAULT_FEEDBACK_SETTINGS = {
   header: '## Feedback\n\nGenerated with Specmark',
   includeLineNumbers: false,
 }
+
+const MARKDOWN_PLUGINS = [remarkGfm]
+const MARKDOWN_COMPONENTS = {
+  table: ({ ...props }) => (
+    <div className="markdown-table">
+      <table {...props} />
+    </div>
+  ),
+}
+
+const MarkdownContent = memo(function MarkdownContent({ content }) {
+  return (
+    <Markdown remarkPlugins={MARKDOWN_PLUGINS} components={MARKDOWN_COMPONENTS}>
+      {content}
+    </Markdown>
+  )
+})
 
 function readFeedbackSettings() {
   if (typeof window === 'undefined') return DEFAULT_FEEDBACK_SETTINGS
@@ -229,14 +246,24 @@ export default function AnnotationView({
     openingDialogRef.current = true
     setReturnFocusElement(event?.currentTarget || contentRef.current)
 
-    // Create highlight from stored range
-    if (selectionRangeRef.current && contentRef.current) {
-      const marks = wrapRangeInMarks(
-        contentRef.current,
-        selectionRangeRef.current,
-        'annotation-mark-active',
-        { 'data-active': 'true' },
-      )
+    // Create highlight from stored range or offsets
+    if (contentRef.current) {
+      clearHighlight()
+      const marks = selectionOffsetsRef.current
+        ? wrapOffsetsInMarks(
+          contentRef.current,
+          selectionOffsetsRef.current,
+          'annotation-mark-active',
+          { 'data-active': 'true' },
+        )
+        : selectionRangeRef.current
+          ? wrapRangeInMarks(
+            contentRef.current,
+            selectionRangeRef.current,
+            'annotation-mark-active',
+            { 'data-active': 'true' },
+          )
+          : []
       highlightRefs.current = marks
     }
 
@@ -251,7 +278,7 @@ export default function AnnotationView({
 
     // Reset the flag after a tick
     setTimeout(() => { openingDialogRef.current = false }, 0)
-  }, [showCommentDialog])
+  }, [clearHighlight, showCommentDialog])
 
   const handleTooltipPress = useCallback((event) => {
     event.preventDefault()
@@ -259,7 +286,7 @@ export default function AnnotationView({
     handleTooltipClick(event)
   }, [handleTooltipClick])
 
-  const applySelection = useCallback((range, text, { lock } = {}) => {
+  const applySelection = useCallback((range, text, { lock, showActive } = {}) => {
     if (!range || !contentRef.current) return
 
     const rect = range.getBoundingClientRect()
@@ -296,7 +323,25 @@ export default function AnnotationView({
     })
     setShowTooltip(true)
     selectionLockedRef.current = Boolean(lock)
-  }, [isDebug])
+
+    if (showActive) {
+      clearHighlight()
+      const marks = selectionOffsetsRef.current
+        ? wrapOffsetsInMarks(
+          contentRef.current,
+          selectionOffsetsRef.current,
+          'annotation-mark-active',
+          { 'data-active': 'true' },
+        )
+        : wrapRangeInMarks(
+          contentRef.current,
+          range,
+          'annotation-mark-active',
+          { 'data-active': 'true' },
+        )
+      highlightRefs.current = marks
+    }
+  }, [clearHighlight, isDebug])
 
   // Listen for selection changes to show tooltip (keyboard-driven)
   useEffect(() => {
@@ -322,10 +367,11 @@ export default function AnnotationView({
         } catch {
           // Selection might be collapsed or invalid
         }
-      } else if (showTooltip && !openingDialogRef.current) {
+      } else if (showTooltip && !openingDialogRef.current && !selectionLockedRef.current) {
         // Selection was cleared (but not because we're opening the dialog)
         selectionRangeRef.current = null
         selectionOffsetsRef.current = null
+        clearHighlight()
         setShowTooltip(false)
         setSelectedText('')
         setSelectionPosition(null)
@@ -366,11 +412,11 @@ export default function AnnotationView({
         const normalizedRange = normalizeSelectionRange(selection, range, contentRef.current)
         if (!normalizedRange) return
 
-        applySelection(normalizedRange, text, { lock: true })
-      } catch {
-        // ignore
+          applySelection(normalizedRange, text, { lock: true, showActive: true })
+        } catch {
+          // ignore
+        }
       }
-    }
 
     container.addEventListener('pointerdown', handlePointerDown)
     document.addEventListener('pointerup', handlePointerUp)
@@ -403,6 +449,7 @@ export default function AnnotationView({
         setSelectedText('')
         selectionOffsetsRef.current = null
         setSelectionPosition(null)
+        selectionLockedRef.current = false
         return
       }
 
@@ -424,6 +471,7 @@ export default function AnnotationView({
       setSelectedText('')
       selectionOffsetsRef.current = null
       setSelectionPosition(null)
+      selectionLockedRef.current = false
     }
   }
 
@@ -435,6 +483,7 @@ export default function AnnotationView({
     selectionOffsetsRef.current = null
     setSelectionPosition(null)
     setEditingAnnotationId(null)
+    selectionLockedRef.current = false
   }
 
   const handleEditFromList = (annotation, rect, triggerElement) => {
@@ -526,18 +575,7 @@ export default function AnnotationView({
           className="annotation-content bg-card text-card-foreground rounded-xl shadow-sm border border-border p-8 md:p-12 prose prose-slate max-w-none"
           onContextMenu={(e) => e.preventDefault()}
         >
-          <Markdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              table: ({ ...props }) => (
-                <div className="markdown-table">
-                  <table {...props} />
-                </div>
-              ),
-            }}
-          >
-            {content}
-          </Markdown>
+          <MarkdownContent content={content} />
         </div>
       </div>
       </div>
@@ -794,6 +832,39 @@ function wrapRangeInMarks(container, range, className, attributes) {
     if (startOffset > 0) {
       target = target.splitText(startOffset)
     }
+
+    const mark = document.createElement('mark')
+    mark.className = className
+    Object.entries(attributes || {}).forEach(([key, value]) => {
+      mark.setAttribute(key, value)
+    })
+
+    target.parentNode.insertBefore(mark, target)
+    mark.appendChild(target)
+    marks.push(mark)
+  })
+
+  return marks
+}
+
+function wrapOffsetsInMarks(container, range, className, attributes) {
+  if (!range) return []
+  const marks = []
+  const nodes = getTextNodesWithOffsets(container)
+
+  nodes.forEach(({ node, start, end }) => {
+    if (range.end <= start || range.start >= end) return
+
+    const localStart = Math.max(range.start, start) - start
+    const localEnd = Math.min(range.end, end) - start
+    if (localStart === localEnd) return
+
+    const segmentText = node.textContent.slice(localStart, localEnd)
+    if (segmentText.trim() === '') return
+
+    let target = node
+    if (localEnd < target.textContent.length) target.splitText(localEnd)
+    if (localStart > 0) target = target.splitText(localStart)
 
     const mark = document.createElement('mark')
     mark.className = className
