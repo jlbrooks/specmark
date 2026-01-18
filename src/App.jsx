@@ -1,14 +1,15 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import InputView from './components/InputView'
 import AnnotationView from './components/AnnotationView'
-import { API_URL } from './config'
+import ShareCodeForm from './components/ShareCodeForm'
 import { decodeMarkdownFromUrl } from './utils/markdownShare'
-import { parseShareErrorResponse, parseShareNetworkError } from './utils/shareErrors'
+import { readSessionStorage, writeSessionStorage } from './utils/sessionStorage'
+import { normalizeView, updateUrlParams, getViewFromUrl } from './utils/urlState'
+import { fetchSharedContent } from './services/shareApi'
 import { trackEvent } from './utils/analytics'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { X, Sparkles, Copy } from 'lucide-react'
+import { Sparkles, Copy } from 'lucide-react'
 
 const SAMPLE_MARKDOWN = `# Project Specification
 
@@ -57,8 +58,6 @@ We will use \`JWT tokens\` for session management with the following structure:
 - What is the session timeout policy?
 `
 
-const SESSION_STORAGE_KEY = 'markdown_annotator_session_v1'
-
 // Generate a simple hash for the markdown content
 function hashContent(content) {
   let hash = 0
@@ -76,10 +75,6 @@ function createAnnotationId() {
     return cryptoObj.randomUUID()
   }
   return `a_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
-}
-
-function normalizeView(view) {
-  return view === 'annotate' ? 'annotate' : 'input'
 }
 
 function getInitialState() {
@@ -161,35 +156,8 @@ function getInitialState() {
   }
 }
 
-function readSessionStorage() {
-  try {
-    const stored = localStorage.getItem(SESSION_STORAGE_KEY)
-    if (!stored) {
-      return null
-    }
-    const parsed = JSON.parse(stored)
-    if (!parsed?.markdown || typeof parsed.markdown !== 'string') {
-      return null
-    }
-    return parsed
-  } catch (err) {
-    console.warn('Failed to read session storage:', err)
-    return null
-  }
-}
-
-function writeSessionStorage(payload) {
-  try {
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(payload))
-  } catch (err) {
-    console.warn('Failed to write session storage:', err)
-  }
-}
-
 function App() {
-  const initialState = getInitialState()
-  const initialStateRef = useRef(initialState)
-  const initialSourceRef = useRef(initialState.source)
+  const initialState = useMemo(() => getInitialState(), [])
   const [markdownContent, setMarkdownContent] = useState(initialState.markdown)
   const [annotations, setAnnotations] = useState(initialState.annotations)
   const [currentView, setCurrentView] = useState(initialState.view) // 'input' or 'annotate'
@@ -200,33 +168,12 @@ function App() {
   const [codeInput, setCodeInput] = useState('')
   const [codeInputError, setCodeInputError] = useState('')
   const sessionRestoredRef = useRef(initialState.fromSession)
-
-  const getViewFromUrl = useCallback(() => {
-    const params = new URLSearchParams(window.location.search)
-    return params.get('view') === 'annotate' ? 'annotate' : 'input'
-  }, [])
-
-  const updateUrlParams = useCallback((updates, { replace = false } = {}) => {
-    const url = new URL(window.location.href)
-    Object.entries(updates).forEach(([key, value]) => {
-      if (value == null || value === '') {
-        url.searchParams.delete(key)
-      } else {
-        url.searchParams.set(key, value)
-      }
-    })
-    if (!url.searchParams.get('view')) {
-      url.searchParams.set('view', getViewFromUrl())
-    }
-    const nextView = url.searchParams.get('view') || 'input'
-    const method = replace ? 'replaceState' : 'pushState'
-    window.history[method]({ view: nextView }, '', url)
-  }, [getViewFromUrl])
+  const annotationViewRef = useRef(null)
 
   const navigateToView = useCallback((view, { replace = false } = {}) => {
     updateUrlParams({ view }, { replace })
     setCurrentView(view)
-  }, [updateUrlParams])
+  }, [])
 
   // Get the storage key - use share code if available, otherwise content hash
   const getStorageKey = (content, code) => {
@@ -237,37 +184,20 @@ function App() {
   }
 
   // Fetch shared content by code
-  const fetchSharedContent = useCallback(async (code, { origin = 'manual' } = {}) => {
+  const loadSharedContent = useCallback(async (code, { origin = 'manual' } = {}) => {
     setLoading(true)
     setShareLoadError(null)
     setShareLoadOrigin(origin)
     try {
-      const response = await fetch(`${API_URL}/api/share/${code}`)
-      let data = null
-      try {
-        data = await response.json()
-      } catch {
-        data = null
-      }
-
-      if (!response.ok) {
-        const errorInfo = parseShareErrorResponse({ data, status: response.status, context: 'load' })
-        throw Object.assign(new Error(errorInfo.message), { code: errorInfo.code })
-      }
-      if (!data?.markdown || typeof data.markdown !== 'string') {
-        throw Object.assign(new Error('Unexpected response from share service.'), { code: 'server_error' })
-      }
-
-      setMarkdownContent(data.markdown)
-      setShareCode(code.toUpperCase())
+      const result = await fetchSharedContent(code)
+      setMarkdownContent(result.markdown)
+      setShareCode(result.shareCode)
       setShareLoadError(null)
       setShareLoadOrigin(null)
       trackEvent('Share Load')
       navigateToView('annotate')
     } catch (err) {
-      const errorInfo = err?.code
-        ? { code: err.code, message: err.message }
-        : parseShareNetworkError('load')
+      const errorInfo = { code: err.code || 'unknown', message: err.message }
       setShareLoadError(errorInfo)
       setShareCode(null)
       if (origin === 'manual') {
@@ -291,17 +221,18 @@ function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    if (initialSourceRef.current === 'session') {
-      updateUrlParams({ view: initialStateRef.current.view }, { replace: true })
+    if (initialState.source === 'session') {
+      updateUrlParams({ view: initialState.view }, { replace: true })
     } else if (!params.get('view')) {
       updateUrlParams({ view: 'input' }, { replace: true })
     }
 
     const code = params.get('c')
     if (code) {
-      fetchSharedContent(code, { origin: 'link' })
+      loadSharedContent(code, { origin: 'link' })
     }
-  }, [fetchSharedContent, updateUrlParams])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     const handlePopState = () => {
@@ -311,7 +242,7 @@ function App() {
 
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
-  }, [getViewFromUrl])
+  }, [])
 
   // Load annotations from localStorage when markdown content or share code changes
   useEffect(() => {
@@ -378,7 +309,7 @@ function App() {
   }
 
   const handleLoadShareCode = (code) => {
-    fetchSharedContent(code, { origin: 'manual' })
+    loadSharedContent(code, { origin: 'manual' })
     // Update URL to reflect the share code
     updateUrlParams({ c: code.toUpperCase() }, { replace: true })
   }
@@ -454,81 +385,25 @@ function App() {
               <a href="/docs">Docs</a>
             </Button>
 
-            {/* Share code input - hidden on mobile */}
-            <form onSubmit={handleLoadCode} className="hidden sm:flex items-center gap-2">
-              <div className="relative">
-                <Input
-                  type="text"
-                  value={codeInput}
-                  onChange={(e) => {
-                    setCodeInput(e.target.value.toUpperCase())
-                    setCodeInputError('')
-                  }}
-                  placeholder="Enter share code"
-                  maxLength={6}
-                  className={cn(
-                    'w-44 font-mono text-sm',
-                    codeInput && 'pr-8',
-                    codeInputError && 'border-destructive focus-visible:ring-destructive'
-                  )}
-                />
-                {codeInput && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCodeInput('')
-                      setCodeInputError('')
-                    }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    aria-label="Clear input"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-              <Button type="submit" size="sm">
-                Load file
-              </Button>
-            </form>
+            <ShareCodeForm
+              value={codeInput}
+              onChange={setCodeInput}
+              onSubmit={handleLoadCode}
+              error={codeInputError}
+              onClearError={() => setCodeInputError('')}
+              variant="desktop"
+            />
           </div>
         </div>
 
-        {/* Mobile share code input */}
-        <form onSubmit={handleLoadCode} className="sm:hidden mt-3 flex items-center gap-2">
-          <div className="relative flex-1">
-            <Input
-              type="text"
-              value={codeInput}
-              onChange={(e) => {
-                setCodeInput(e.target.value.toUpperCase())
-                setCodeInputError('')
-              }}
-              placeholder="Enter share code"
-              maxLength={6}
-              className={cn(
-                'w-full font-mono text-sm',
-                codeInput && 'pr-8',
-                codeInputError && 'border-destructive focus-visible:ring-destructive'
-              )}
-            />
-            {codeInput && (
-              <button
-                type="button"
-                onClick={() => {
-                  setCodeInput('')
-                  setCodeInputError('')
-                }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="Clear input"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-          <Button type="submit" size="sm">
-            Load
-          </Button>
-        </form>
+        <ShareCodeForm
+          value={codeInput}
+          onChange={setCodeInput}
+          onSubmit={handleLoadCode}
+          error={codeInputError}
+          onClearError={() => setCodeInputError('')}
+          variant="mobile"
+        />
 
         {codeInputError && (
           <p className="mt-1 text-xs text-destructive">{codeInputError}</p>
@@ -582,11 +457,7 @@ function App() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                // This will be handled by AnnotationView's copy function
-                // We'll emit a custom event or pass a ref
-                window.dispatchEvent(new CustomEvent('specmark:copy-comments'))
-              }}
+              onClick={() => annotationViewRef.current?.copyAll()}
               disabled={annotations.length === 0}
               className="gap-2"
             >
@@ -607,6 +478,7 @@ function App() {
           />
         ) : (
           <AnnotationView
+            ref={annotationViewRef}
             content={markdownContent}
             annotations={annotations}
             onAddAnnotation={handleAddAnnotation}

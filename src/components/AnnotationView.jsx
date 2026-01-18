@@ -1,10 +1,13 @@
-import { useState, useRef, useCallback, useEffect, memo } from 'react'
+import { useState, useRef, useCallback, useEffect, memo, forwardRef, useImperativeHandle } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import CommentDialog from './CommentDialog'
 import AnnotationList from './AnnotationList'
 import { trackEvent } from '../utils/analytics'
-import { getRangeOffsets, getTextNodesWithOffsets, normalizeSelectionRange } from '../utils/selection'
+import { getRangeOffsets, normalizeSelectionRange } from '../utils/selection'
+import { generateFeedbackText } from '../utils/feedbackExport'
+import { wrapRangeInMarks, wrapOffsetsInMarks, wrapInSmHighlight, buildAnnotationRanges } from '../utils/highlightDom'
+import { hasOverlap } from '../utils/annotationOverlap'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
@@ -71,14 +74,14 @@ function readFeedbackSettings() {
   }
 }
 
-export default function AnnotationView({
+const AnnotationView = forwardRef(function AnnotationView({
   content,
   annotations,
   onAddAnnotation,
   onUpdateAnnotation,
   onDeleteAnnotation,
   onClearAnnotations,
-}) {
+}, ref) {
   const [showCommentDialog, setShowCommentDialog] = useState(false)
   const [showTooltip, setShowTooltip] = useState(false)
   const [selectedText, setSelectedText] = useState('')
@@ -92,6 +95,13 @@ export default function AnnotationView({
     if (typeof window === 'undefined') return true
     return window.matchMedia('(min-width: 768px)').matches
   })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mql = window.matchMedia('(min-width: 768px)')
+    const handler = (e) => setShowAnnotations(e.matches)
+    mql.addEventListener('change', handler)
+    return () => mql.removeEventListener('change', handler)
+  }, [])
   const [exportSettings, setExportSettings] = useState(() => readFeedbackSettings())
   const [returnFocusElement, setReturnFocusElement] = useState(null)
   const [overlapToast, setOverlapToast] = useState(false)
@@ -137,14 +147,10 @@ export default function AnnotationView({
     }
   }, [annotations, exportSettings])
 
-  // Listen for copy-comments event from App.jsx header button
-  useEffect(() => {
-    const handleCopyEvent = () => {
-      handleCopyFeedback()
-    }
-    window.addEventListener('specmark:copy-comments', handleCopyEvent)
-    return () => window.removeEventListener('specmark:copy-comments', handleCopyEvent)
-  }, [handleCopyFeedback])
+  // Expose copyAll method via ref
+  useImperativeHandle(ref, () => ({
+    copyAll: handleCopyFeedback,
+  }), [handleCopyFeedback])
 
   // Highlight existing annotations in the content
   useEffect(() => {
@@ -670,247 +676,6 @@ export default function AnnotationView({
       )}
     </div>
   )
-}
+})
 
-function generateFeedbackText(annotations, { header, includeLineNumbers, sourceText } = {}) {
-  const normalizedHeader = typeof header === 'string' ? header.trim() : ''
-  const textSource = typeof sourceText === 'string' ? sourceText : ''
-  const lineStarts = includeLineNumbers && textSource ? getLineStarts(textSource) : []
-  const lastIndexByText = new Map()
-
-  let feedback = ''
-  if (normalizedHeader) {
-    feedback += `${normalizedHeader}\n\n`
-  }
-
-  annotations.forEach((annotation, index) => {
-    const lineInfo = includeLineNumbers
-      ? getLineInfo(annotation, textSource, lineStarts, lastIndexByText)
-      : null
-    const heading = lineInfo
-      ? `### ${index + 1}. ${lineInfo}`
-      : `### ${index + 1}.`
-
-    feedback += `${heading}\n\n`
-    feedback += `${formatQuotedText(annotation.selectedText)}\n\n`
-    feedback += `${annotation.comment}\n\n`
-  })
-
-  return feedback.trim() + '\n'
-}
-
-function getLineStarts(text) {
-  const starts = [0]
-  for (let i = 0; i < text.length; i += 1) {
-    if (text[i] === '\n') {
-      starts.push(i + 1)
-    }
-  }
-  return starts
-}
-
-function getLineInfo(annotation, textSource, lineStarts, lastIndexByText) {
-  if (!textSource) return null
-
-  let start = annotation?.range?.start
-  let end = annotation?.range?.end
-
-  if (!Number.isFinite(start) || !Number.isFinite(end)) {
-    const selectedText = annotation?.selectedText
-    if (!selectedText) return null
-    const fromIndex = lastIndexByText.get(selectedText) ?? 0
-    const foundIndex = textSource.indexOf(selectedText, fromIndex)
-    if (foundIndex === -1) return null
-    start = foundIndex
-    end = foundIndex + selectedText.length
-    lastIndexByText.set(selectedText, end)
-  }
-
-  const startLine = getLineNumber(lineStarts, start)
-  const endLine = getLineNumber(lineStarts, Math.max(start, end - 1))
-
-  if (!startLine || !endLine) return null
-  if (startLine === endLine) return `Line ${startLine}`
-  return `Lines ${startLine}-${endLine}`
-}
-
-function getLineNumber(lineStarts, offset) {
-  let low = 0
-  let high = lineStarts.length - 1
-  let result = 1
-
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2)
-    const start = lineStarts[mid]
-    if (start <= offset) {
-      result = mid + 1
-      low = mid + 1
-    } else {
-      high = mid - 1
-    }
-  }
-
-  return result
-}
-
-function formatQuotedText(text) {
-  const safeText = typeof text === 'string' ? text : ''
-  return safeText.split('\n').map((line) => `> ${line}`).join('\n')
-}
-
-function wrapRangeInMarks(container, range, className, attributes) {
-  const marks = []
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
-  const textNodes = []
-
-  while (walker.nextNode()) {
-    textNodes.push(walker.currentNode)
-  }
-
-  textNodes.forEach((node) => {
-    if (!range.intersectsNode(node)) return
-
-    let startOffset = 0
-    let endOffset = node.textContent.length
-
-    if (node === range.startContainer) {
-      startOffset = range.startOffset
-    }
-    if (node === range.endContainer) {
-      endOffset = range.endOffset
-    }
-
-    if (startOffset === endOffset) return
-    const segmentText = node.textContent.slice(startOffset, endOffset)
-    if (segmentText.trim() === '') return
-
-    let target = node
-    if (endOffset < target.textContent.length) {
-      target.splitText(endOffset)
-    }
-    if (startOffset > 0) {
-      target = target.splitText(startOffset)
-    }
-
-    const mark = document.createElement('mark')
-    mark.className = className
-    Object.entries(attributes || {}).forEach(([key, value]) => {
-      mark.setAttribute(key, value)
-    })
-
-    target.parentNode.insertBefore(mark, target)
-    mark.appendChild(target)
-    marks.push(mark)
-  })
-
-  return marks
-}
-
-function wrapOffsetsInMarks(container, range, className, attributes) {
-  if (!range) return []
-  const marks = []
-  const nodes = getTextNodesWithOffsets(container)
-
-  nodes.forEach(({ node, start, end }) => {
-    if (range.end <= start || range.start >= end) return
-
-    const localStart = Math.max(range.start, start) - start
-    const localEnd = Math.min(range.end, end) - start
-    if (localStart === localEnd) return
-
-    const segmentText = node.textContent.slice(localStart, localEnd)
-    if (segmentText.trim() === '') return
-
-    let target = node
-    if (localEnd < target.textContent.length) target.splitText(localEnd)
-    if (localStart > 0) target = target.splitText(localStart)
-
-    const mark = document.createElement('mark')
-    mark.className = className
-    Object.entries(attributes || {}).forEach(([key, value]) => {
-      mark.setAttribute(key, value)
-    })
-
-    target.parentNode.insertBefore(mark, target)
-    mark.appendChild(target)
-    marks.push(mark)
-  })
-
-  return marks
-}
-
-function hasOverlap(nextRange, annotations) {
-  return annotations.some((annotation) => {
-    const start = annotation?.range?.start
-    const end = annotation?.range?.end
-    if (!Number.isFinite(start) || !Number.isFinite(end)) return false
-    return nextRange.start < end && nextRange.end > start
-  })
-}
-
-function wrapInSmHighlight(container, annotation, range) {
-  const nodes = getTextNodesWithOffsets(container)
-
-  nodes.forEach(({ node, start, end }) => {
-    if (range.end <= start || range.start >= end) return
-
-    const localStart = Math.max(range.start, start) - start
-    const localEnd = Math.min(range.end, end) - start
-    if (localStart === localEnd) return
-
-    const segmentText = node.textContent.slice(localStart, localEnd)
-    if (segmentText.trim() === '') return
-
-    let target = node
-    if (localEnd < target.textContent.length) target.splitText(localEnd)
-    if (localStart > 0) target = target.splitText(localStart)
-
-    const highlight = document.createElement('sm-highlight')
-    highlight.setAttribute('data-annotation-id', annotation.id)
-    highlight.setAttribute('data-has-comment', annotation.comment ? 'true' : 'false')
-    target.parentNode.insertBefore(highlight, target)
-    highlight.appendChild(target)
-  })
-}
-
-function buildAnnotationRanges(container, annotations) {
-  const content = container.textContent || ''
-  const contentLength = content.length
-  const ranges = []
-  const lastIndexByText = new Map()
-
-  annotations.forEach((annotation) => {
-    const rangeStart = annotation?.range?.start
-    const rangeEnd = annotation?.range?.end
-
-    if (Number.isFinite(rangeStart) && Number.isFinite(rangeEnd) && rangeEnd > rangeStart) {
-      if (rangeStart >= 0 && rangeEnd <= contentLength) {
-        // Trim whitespace from the range
-        const rangeText = content.slice(rangeStart, rangeEnd)
-        const trimmedText = rangeText.replace(/^\s+/, '') // Remove leading whitespace
-        const leadingWhitespace = rangeText.length - trimmedText.length
-        const trimmedStart = rangeStart + leadingWhitespace
-
-        const finalText = trimmedText.replace(/\s+$/, '') // Remove trailing whitespace
-        const trimmedEnd = trimmedStart + finalText.length
-
-        if (trimmedEnd > trimmedStart) {
-          ranges.push({ start: trimmedStart, end: trimmedEnd, id: annotation.id })
-        }
-      }
-      return
-    }
-
-    const searchText = annotation.selectedText
-    if (!searchText) return
-
-    const startIndex = lastIndexByText.get(searchText) ?? 0
-    const index = content.indexOf(searchText, startIndex)
-    if (index === -1) return
-
-    lastIndexByText.set(searchText, index + searchText.length)
-    ranges.push({ start: index, end: index + searchText.length, id: annotation.id })
-  })
-
-  return ranges
-}
+export default AnnotationView
