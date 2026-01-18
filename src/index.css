@@ -174,29 +174,29 @@ body,
   border-collapse: collapse;
 }
 
-/* Saved annotation: yellow bg + orange bottom border */
-.annotation-mark {
+/* Custom highlight element */
+sm-highlight {
+  display: inline;
   background-color: var(--highlight-saved);
-  border-bottom: 2px solid var(--highlight-border);
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
-  padding: 0.1em 0;
+  border-radius: 2px;
   cursor: pointer;
   transition: background-color 150ms ease;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
-.annotation-mark:hover {
+sm-highlight:hover,
+sm-highlight:focus {
   background-color: #EED0AB55;
+  outline: none;
 }
 
-/* Multiple overlapping annotations */
-.annotation-mark-multi {
-  background-color: var(--highlight-saved);
-  border-bottom: 3px solid var(--highlight-border);
-  box-shadow: inset 0 -1px 0 0 var(--highlight-border);
+/* With comment indicator */
+sm-highlight.sm-highlight--has-comment {
+  border-bottom: 2px solid var(--highlight-border);
 }
 
-/* In-progress selection: blue highlight */
+/* In-progress selection: blue highlight (still using mark for active) */
 .annotation-mark-active {
   background-color: var(--highlight-active);
   box-decoration-break: clone;
