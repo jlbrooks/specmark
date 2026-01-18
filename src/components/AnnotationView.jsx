@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm'
 import CommentDialog from './CommentDialog'
 import AnnotationList from './AnnotationList'
 import { trackEvent } from '../utils/analytics'
+import { getRangeOffsets, getTextNodesWithOffsets, normalizeSelectionRange } from '../utils/selection'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
@@ -78,8 +79,6 @@ export default function AnnotationView({
   onDeleteAnnotation,
   onClearAnnotations,
 }) {
-  const isDebug = typeof window !== 'undefined'
-    && new URLSearchParams(window.location.search).get('debug') === '1'
   const [showCommentDialog, setShowCommentDialog] = useState(false)
   const [showTooltip, setShowTooltip] = useState(false)
   const [selectedText, setSelectedText] = useState('')
@@ -174,22 +173,12 @@ export default function AnnotationView({
     // Sort by start position descending to avoid offset shifts during wrapping
     const sorted = [...ranges].sort((a, b) => b.start - a.start)
 
-    if (isDebug) {
-      console.groupCollapsed('[specmark] render highlights')
-      console.log('ranges', sorted)
-      console.log('content length', container.textContent?.length ?? 0)
-    }
-
     sorted.forEach((range) => {
       const annotation = annotations.find((a) => a.id === range.id)
       if (annotation) {
-        wrapInSmHighlight(container, annotation, range, isDebug)
+        wrapInSmHighlight(container, annotation, range)
       }
     })
-
-    if (isDebug) {
-      console.groupEnd()
-    }
   }, [annotations, content, showCommentDialog])
 
   useEffect(() => {
@@ -293,29 +282,6 @@ export default function AnnotationView({
     selectionRangeRef.current = range.cloneRange()
     selectionOffsetsRef.current = getRangeOffsets(range, contentRef.current)
 
-    if (isDebug) {
-      const offsets = selectionOffsetsRef.current
-      console.groupCollapsed('[specmark] selection')
-      console.log('text', text)
-      console.log('offsets', offsets)
-      console.log('range start', {
-        node: range.startContainer?.nodeName,
-        type: range.startContainer?.nodeType,
-        offset: range.startOffset,
-      })
-      console.log('range end', {
-        node: range.endContainer?.nodeName,
-        type: range.endContainer?.nodeType,
-        offset: range.endOffset,
-      })
-      if (offsets) {
-        const previewStart = Math.max(0, offsets.start - 40)
-        const previewEnd = Math.min(contentRef.current.textContent.length, offsets.end + 40)
-        console.log('context', contentRef.current.textContent.slice(previewStart, previewEnd))
-      }
-      console.groupEnd()
-    }
-
     setSelectedText(text)
     setSelectionPosition({
       x: rect.left + rect.width / 2,
@@ -341,7 +307,7 @@ export default function AnnotationView({
         )
       highlightRefs.current = marks
     }
-  }, [clearHighlight, isDebug])
+  }, [clearHighlight])
 
   // Listen for selection changes to show tooltip (keyboard-driven)
   useEffect(() => {
@@ -451,13 +417,6 @@ export default function AnnotationView({
         setSelectionPosition(null)
         selectionLockedRef.current = false
         return
-      }
-
-      if (isDebug) {
-        console.groupCollapsed('[specmark] add annotation')
-        console.log('selectedText', selectedText)
-        console.log('range', selectionOffsetsRef.current)
-        console.groupEnd()
       }
 
       onAddAnnotation({
@@ -889,7 +848,7 @@ function hasOverlap(nextRange, annotations) {
   })
 }
 
-function wrapInSmHighlight(container, annotation, range, isDebug) {
+function wrapInSmHighlight(container, annotation, range) {
   const nodes = getTextNodesWithOffsets(container)
 
   nodes.forEach(({ node, start, end }) => {
@@ -901,18 +860,6 @@ function wrapInSmHighlight(container, annotation, range, isDebug) {
 
     const segmentText = node.textContent.slice(localStart, localEnd)
     if (segmentText.trim() === '') return
-
-    if (isDebug) {
-      console.log('wrap', {
-        tag: node.parentElement?.tagName,
-        nodeText: node.textContent,
-        nodeStart: start,
-        nodeEnd: end,
-        localStart,
-        localEnd,
-        segmentText,
-      })
-    }
 
     let target = node
     if (localEnd < target.textContent.length) target.splitText(localEnd)
@@ -931,82 +878,6 @@ function rangeIntersectsNode(range, node) {
   nodeRange.selectNodeContents(node)
   return range.compareBoundaryPoints(Range.END_TO_START, nodeRange) > 0
     && range.compareBoundaryPoints(Range.START_TO_END, nodeRange) < 0
-}
-
-function getTextNodesWithOffsets(container) {
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
-  const nodes = []
-  let offset = 0
-
-  while (walker.nextNode()) {
-    const node = walker.currentNode
-    const length = node.textContent.length
-    nodes.push({ node, start: offset, end: offset + length })
-    offset += length
-  }
-
-  return nodes
-}
-
-function getRangeOffsets(range, container) {
-  if (!range || !container) return null
-
-  try {
-    const startRange = range.cloneRange()
-    startRange.selectNodeContents(container)
-    startRange.setEnd(range.startContainer, range.startOffset)
-    const start = startRange.toString().length
-
-    const endRange = range.cloneRange()
-    endRange.selectNodeContents(container)
-    endRange.setEnd(range.endContainer, range.endOffset)
-    const end = endRange.toString().length
-
-    if (!Number.isFinite(start) || !Number.isFinite(end)) return null
-    if (end < start) return { start: end, end: start }
-    return { start, end }
-  } catch {
-    return null
-  }
-}
-
-function normalizeSelectionRange(selection, fallbackRange, container) {
-  if (!selection || selection.rangeCount === 0) return fallbackRange
-
-  const anchorNode = selection.anchorNode
-  const focusNode = selection.focusNode
-  if (!anchorNode || !focusNode) return fallbackRange
-  if (container && (!container.contains(anchorNode) || !container.contains(focusNode))) {
-    return fallbackRange
-  }
-
-  let startNode = anchorNode
-  let startOffset = selection.anchorOffset ?? 0
-  let endNode = focusNode
-  let endOffset = selection.focusOffset ?? 0
-
-  if (anchorNode === focusNode) {
-    if (startOffset > endOffset) {
-      ;[startOffset, endOffset] = [endOffset, startOffset]
-    }
-  } else {
-    const position = anchorNode.compareDocumentPosition(focusNode)
-    if (position & Node.DOCUMENT_POSITION_PRECEDING) {
-      startNode = focusNode
-      startOffset = selection.focusOffset ?? 0
-      endNode = anchorNode
-      endOffset = selection.anchorOffset ?? 0
-    }
-  }
-
-  try {
-    const normalized = document.createRange()
-    normalized.setStart(startNode, startOffset)
-    normalized.setEnd(endNode, endOffset)
-    return normalized
-  } catch {
-    return fallbackRange
-  }
 }
 
 function buildAnnotationRanges(container, annotations) {
