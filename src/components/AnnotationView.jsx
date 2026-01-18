@@ -347,7 +347,7 @@ export default function AnnotationView({
 
     document.addEventListener('selectionchange', handleSelectionChange)
     return () => document.removeEventListener('selectionchange', handleSelectionChange)
-  }, [showCommentDialog, showTooltip, applySelection])
+  }, [showCommentDialog, showTooltip, applySelection, clearHighlight])
 
   // Pointer-driven selection capture (mouse/touch)
   useEffect(() => {
@@ -871,13 +871,6 @@ function wrapInSmHighlight(container, annotation, range) {
     target.parentNode.insertBefore(highlight, target)
     highlight.appendChild(target)
   })
-}
-
-function rangeIntersectsNode(range, node) {
-  const nodeRange = document.createRange()
-  nodeRange.selectNodeContents(node)
-  return range.compareBoundaryPoints(Range.END_TO_START, nodeRange) > 0
-    && range.compareBoundaryPoints(Range.START_TO_END, nodeRange) < 0
 }
 
 function buildAnnotationRanges(container, annotations) {
