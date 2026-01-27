@@ -29,7 +29,7 @@ export default function ShareCodeForm({ value, onChange, onSubmit, error, onClea
           placeholder="Enter share code"
           maxLength={6}
           className={cn(
-            'font-mono text-sm',
+            'font-mono text-[16px] sm:text-sm',
             isDesktop ? 'w-44' : 'w-full',
             value && 'pr-8',
             error && 'border-destructive focus-visible:ring-destructive'

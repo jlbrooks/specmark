@@ -115,7 +115,7 @@ export default function ReviewToolbar({
                         ...exportSettings,
                         header: event.target.value,
                       })}
-                      className="mt-1 w-full text-xs font-mono"
+                      className="mt-1 w-full text-[16px] sm:text-xs font-mono"
                       placeholder="Add a header or context for your feedback"
                     />
                   </label>

@@ -128,7 +128,7 @@ export default function CommentDialog({
     const viewportWidth = window.innerWidth
     const viewportHeight = window.innerHeight
     const dialogHeight = 200
-    const dialogWidth = 320
+    const dialogWidth = Math.min(320, viewportWidth - 32)
     const buttonSize = 40
     const gap = 12
 
@@ -146,10 +146,12 @@ export default function CommentDialog({
 
     style.left = `${left}px`
     style.top = `${top}px`
+    style.width = `${dialogWidth}px`
+    style.maxWidth = 'calc(100vw - 32px)'
   } else if (position) {
     const viewportWidth = window.innerWidth
     const dialogHeight = 200
-    const dialogWidth = 320
+    const dialogWidth = Math.min(320, viewportWidth - 32)
 
     // Position horizontally - center on selection, but keep in viewport
     let left = position.x - dialogWidth / 2
@@ -163,6 +165,8 @@ export default function CommentDialog({
 
     style.left = `${left}px`
     style.top = `${top}px`
+    style.width = `${dialogWidth}px`
+    style.maxWidth = 'calc(100vw - 32px)'
   }
 
   return (
@@ -177,7 +181,7 @@ export default function CommentDialog({
         aria-modal="true"
         ref={dialogRef}
         style={style}
-        className="fixed z-50 w-80 bg-card text-card-foreground rounded-lg shadow-2xl border border-border overflow-hidden"
+        className="fixed z-50 w-80 max-w-[calc(100vw-32px)] bg-card text-card-foreground rounded-lg shadow-2xl border border-border overflow-hidden"
         onKeyDown={handleDialogKeyDown}
       >
         <div className="bg-primary/10 border-b border-border px-3 py-2">
@@ -190,7 +194,7 @@ export default function CommentDialog({
           <Textarea
             ref={textareaRef}
             rows="3"
-            className="text-sm resize-none"
+            className="text-[16px] sm:text-sm resize-none"
             placeholder="Add your feedback..."
             value={comment}
             onChange={(e) => setComment(e.target.value)}
