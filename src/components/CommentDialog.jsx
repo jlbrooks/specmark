@@ -5,6 +5,7 @@ import { Textarea } from '@/components/ui/textarea'
 export default function CommentDialog({
   selectedText,
   position,
+  anchor,
   onSave,
   onCancel,
   initialComment = '',
@@ -123,7 +124,29 @@ export default function CommentDialog({
 
   // Calculate position - prefer above selection to avoid iOS menu
   const style = {}
-  if (position) {
+  if (anchor) {
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+    const dialogHeight = 200
+    const dialogWidth = 320
+    const buttonSize = 40
+    const gap = 12
+
+    let left = anchor.x + buttonSize + gap
+    if (left + dialogWidth + 16 > viewportWidth) {
+      left = anchor.x - gap - dialogWidth
+    }
+    left = Math.max(16, Math.min(left, viewportWidth - dialogWidth - 16))
+
+    let top = anchor.y - 8
+    if (top + dialogHeight + 16 > viewportHeight) {
+      top = viewportHeight - dialogHeight - 16
+    }
+    top = Math.max(16, top)
+
+    style.left = `${left}px`
+    style.top = `${top}px`
+  } else if (position) {
     const viewportWidth = window.innerWidth
     const dialogHeight = 200
     const dialogWidth = 320

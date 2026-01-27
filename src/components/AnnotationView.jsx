@@ -211,6 +211,8 @@ const AnnotationView = forwardRef(function AnnotationView({
       setSelectionPosition({
         x: rect.left + rect.width / 2,
         y: rect.top,
+        right: rect.right,
+        centerY: rect.top + rect.height / 2,
       })
       setShowTooltip(false)
       setDialogKey(Date.now())
@@ -292,6 +294,8 @@ const AnnotationView = forwardRef(function AnnotationView({
     setSelectionPosition({
       x: rect.left + rect.width / 2,
       y: rect.top,
+      right: rect.right,
+      centerY: rect.top + rect.height / 2,
     })
     setShowTooltip(true)
     selectionLockedRef.current = Boolean(lock)
@@ -455,9 +459,13 @@ const AnnotationView = forwardRef(function AnnotationView({
     setReturnFocusElement(triggerElement || contentRef.current)
     setEditingAnnotationId(annotation.id)
     setSelectedText(annotation.selectedText)
+    const fallbackX = rect ? rect.left + rect.width / 2 : window.innerWidth / 2
+    const fallbackY = rect ? rect.top : window.innerHeight / 2
     setSelectionPosition({
-      x: rect?.left + rect?.width / 2 || window.innerWidth / 2,
-      y: rect?.top || window.innerHeight / 2,
+      x: fallbackX,
+      y: fallbackY,
+      right: rect?.right ?? fallbackX,
+      centerY: rect ? rect.top + rect.height / 2 : fallbackY,
     })
     setShowTooltip(false)
     setDialogKey(Date.now())
@@ -499,6 +507,25 @@ const AnnotationView = forwardRef(function AnnotationView({
     }
     resetSheet()
   }
+
+  const tooltipAnchor = !isMobile && selectionPosition && typeof window !== 'undefined'
+    ? {
+        x: Math.max(
+          16,
+          Math.min(
+            (selectionPosition.right ?? selectionPosition.x) + 14,
+            window.innerWidth - 56,
+          ),
+        ),
+        y: Math.max(
+          16,
+          Math.min(
+            (selectionPosition.y ?? 0) - 26,
+            window.innerHeight - 56,
+          ),
+        ),
+      }
+    : null
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -606,7 +633,7 @@ const AnnotationView = forwardRef(function AnnotationView({
         </div>
       )}
 
-      {/* Floating tooltip button - positioned above selection */}
+      {/* Floating tooltip button - positioned beside selection */}
       {showTooltip && selectionPosition && (
         <button
           onClick={(event) => handleTooltipClick(event)}
@@ -617,16 +644,19 @@ const AnnotationView = forwardRef(function AnnotationView({
             position: 'fixed',
             left: isMobile
               ? '50%'
-              : `${Math.max(24, Math.min(selectionPosition.x - 20, window.innerWidth - 64))}px`,
-            top: isMobile ? 'auto' : `${selectionPosition.y - 48}px`, // 40px button + 8px gap above selection
+              : `${tooltipAnchor?.x ?? 0}px`,
+            top: isMobile
+              ? 'auto'
+              : `${tooltipAnchor?.y ?? 0}px`,
             bottom: isMobile ? 'calc(env(safe-area-inset-bottom, 0px) + 72px)' : 'auto',
             transform: isMobile ? 'translateX(-50%)' : 'none',
           }}
-          className="z-50 w-10 h-10 bg-primary text-primary-foreground rounded-full shadow-lg flex items-center justify-center transition-colors hover:bg-primary/90 touch-manipulation select-none"
+          className="z-50 w-10 h-10 bg-card text-foreground border border-border rounded-xl shadow-lg flex items-center justify-center transition-colors hover:bg-muted touch-manipulation select-none"
           aria-label="Add comment"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 7v6m-3-3h6" />
           </svg>
         </button>
       )}
@@ -637,6 +667,7 @@ const AnnotationView = forwardRef(function AnnotationView({
           key={dialogKey}
           selectedText={selectedText}
           position={selectionPosition}
+          anchor={tooltipAnchor}
           onSave={handleAddComment}
           onCancel={handleCancelComment}
           initialComment={annotations.find((item) => item.id === editingAnnotationId)?.comment || ''}
