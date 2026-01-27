@@ -304,7 +304,7 @@ function App() {
         window.removeEventListener('resize', setHeight)
       }
     }
-  }, [])
+  }, [loading, shareLoadError])
 
   const handleAddAnnotation = (annotation) => {
     setAnnotations((prev) => [...prev, { ...annotation, id: createAnnotationId() }])
