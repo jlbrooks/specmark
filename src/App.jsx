@@ -143,6 +143,7 @@ function App() {
   const [codeInput, setCodeInput] = useState('')
   const [codeInputError, setCodeInputError] = useState('')
   const [exportSettings, setExportSettings] = useState(() => readFeedbackSettings())
+  const [copyPulse, setCopyPulse] = useState(0)
   const sessionRestoredRef = useRef(initialState.fromSession)
   const annotationViewRef = useRef(null)
   const topbarRef = useRef(null)
@@ -309,6 +310,13 @@ function App() {
     setAnnotations((prev) => [...prev, { ...annotation, id: createAnnotationId() }])
   }
 
+  const handleCopyComments = useCallback(async () => {
+    const didCopy = await annotationViewRef.current?.copyAll()
+    if (didCopy) {
+      setCopyPulse(Date.now())
+    }
+  }, [])
+
   const handleDeleteAnnotation = (id) => {
     setAnnotations((prev) => prev.filter((annotation) => annotation.id !== id))
   }
@@ -428,14 +436,15 @@ function App() {
 
         <ReviewToolbar
           currentView={currentView}
-          canReview={Boolean(markdownContent.trim())}
-          annotationsLength={annotations.length}
-          onNavigate={navigateToView}
-          onClearMarkdown={() => setMarkdownContent('')}
-          onCopyComments={() => annotationViewRef.current?.copyAll()}
-          exportSettings={exportSettings}
-          onExportSettingsChange={setExportSettings}
-        />
+        canReview={Boolean(markdownContent.trim())}
+        annotationsLength={annotations.length}
+        onNavigate={navigateToView}
+        onClearMarkdown={() => setMarkdownContent('')}
+        onCopyComments={handleCopyComments}
+        copyPulse={copyPulse}
+        exportSettings={exportSettings}
+        onExportSettingsChange={setExportSettings}
+      />
       </div>
 
       {/* Main Content */}

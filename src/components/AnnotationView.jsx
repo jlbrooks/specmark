@@ -113,9 +113,11 @@ const AnnotationView = forwardRef(function AnnotationView({
     try {
       await navigator.clipboard.writeText(feedback)
       setCopyFallbackText(null)
+      return true
     } catch (err) {
       console.error('Failed to copy:', err)
       setCopyFallbackText(feedback)
+      return false
     }
   }, [annotations, exportSettings])
 

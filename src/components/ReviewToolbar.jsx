@@ -12,10 +12,12 @@ export default function ReviewToolbar({
   onNavigate,
   onClearMarkdown,
   onCopyComments,
+  copyPulse,
   exportSettings,
   onExportSettingsChange,
 }) {
   const [showExportSettings, setShowExportSettings] = useState(false)
+  const [animateCopy, setAnimateCopy] = useState(false)
   const exportPanelRef = useRef(null)
 
   useEffect(() => {
@@ -34,6 +36,13 @@ export default function ReviewToolbar({
       setShowExportSettings(false)
     }
   }, [currentView])
+
+  useEffect(() => {
+    if (!copyPulse) return
+    setAnimateCopy(true)
+    const timeout = window.setTimeout(() => setAnimateCopy(false), 420)
+    return () => window.clearTimeout(timeout)
+  }, [copyPulse])
 
   return (
     <div className="border-b border-border px-4 sm:px-6 py-3 flex items-center justify-between bg-background shadow-sm">
@@ -119,7 +128,7 @@ export default function ReviewToolbar({
               size="sm"
               onClick={onCopyComments}
               disabled={annotationsLength === 0}
-              className="gap-2"
+              className={cn('gap-2', animateCopy && 'copy-pop')}
             >
               <Copy className="h-4 w-4" />
               <span className="hidden sm:inline">Copy comments</span>
