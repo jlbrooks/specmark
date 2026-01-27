@@ -11,6 +11,10 @@ function buildPositions({ annotations, contentRef, wrapperRef }) {
 
   const wrapperRect = wrapperRef.current.getBoundingClientRect()
   const viewportRight = window.innerWidth - wrapperRect.left - 16
+  const columnLeft = Math.max(
+    16,
+    Math.min(wrapperRect.width + COMMENT_GAP, viewportRight - COMMENT_BOX_WIDTH),
+  )
   const positions = []
 
   annotations.forEach((annotation) => {
@@ -22,37 +26,30 @@ function buildPositions({ annotations, contentRef, wrapperRef }) {
     if (!highlights.length) return
 
     let minTop = Infinity
-    let minLeft = Infinity
-    let maxRight = -Infinity
 
     highlights.forEach((node) => {
       const rect = node.getBoundingClientRect()
       minTop = Math.min(minTop, rect.top)
-      minLeft = Math.min(minLeft, rect.left)
-      maxRight = Math.max(maxRight, rect.right)
     })
 
-    if (!Number.isFinite(minTop) || !Number.isFinite(maxRight)) return
-
-    const rightCandidate = maxRight - wrapperRect.left + COMMENT_GAP
-    const leftCandidate = minLeft - wrapperRect.left - COMMENT_BOX_WIDTH - COMMENT_GAP
-    let left = rightCandidate
-
-    if (rightCandidate + COMMENT_BOX_WIDTH > viewportRight && leftCandidate >= 16) {
-      left = leftCandidate
-    }
-
-    left = Math.max(16, Math.min(left, viewportRight - COMMENT_BOX_WIDTH))
+    if (!Number.isFinite(minTop)) return
 
     positions.push({
       id: annotation.id,
       annotation,
-      left,
+      left: columnLeft,
       top: Math.max(8, minTop - wrapperRect.top - 6),
     })
   })
 
-  return positions.sort((a, b) => a.top - b.top)
+  const sorted = positions.sort((a, b) => a.top - b.top)
+  let nextTop = 8
+  sorted.forEach((item) => {
+    const alignedTop = Math.max(item.top, nextTop)
+    item.top = alignedTop
+    nextTop = alignedTop + 76
+  })
+  return sorted
 }
 
 export default function InlineComments({
@@ -96,7 +93,7 @@ export default function InlineComments({
       {positions.map(({ id, annotation, left, top }) => (
         <div
           key={id}
-          className="pointer-events-auto absolute w-60 rounded-xl border border-border bg-card/95 shadow-sm px-3 py-2 text-sm text-foreground backdrop-blur-sm"
+          className="pointer-events-auto absolute w-60 overflow-hidden rounded-xl border border-border bg-card/95 shadow-sm px-3 py-2 text-sm text-foreground backdrop-blur-sm"
           style={{ left: `${left}px`, top: `${top}px` }}
           role="button"
           tabIndex={0}
@@ -116,7 +113,7 @@ export default function InlineComments({
           }}
         >
           <div className="flex items-start gap-2">
-            <p className="flex-1 leading-relaxed">{annotation.comment}</p>
+            <p className="flex-1 break-words leading-relaxed">{annotation.comment}</p>
             <Button
               variant="ghost"
               size="icon"

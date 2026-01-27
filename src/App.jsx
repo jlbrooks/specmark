@@ -2,61 +2,20 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import InputView from './components/InputView'
 import AnnotationView from './components/AnnotationView'
 import ShareCodeForm from './components/ShareCodeForm'
+import ReviewToolbar from './components/ReviewToolbar'
 import { decodeMarkdownFromUrl } from './utils/markdownShare'
 import { readSessionStorage, writeSessionStorage } from './utils/sessionStorage'
 import { normalizeView, updateUrlParams, getViewFromUrl } from './utils/urlState'
 import { fetchSharedContent } from './services/shareApi'
 import { trackEvent } from './utils/analytics'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { Sparkles, Copy } from 'lucide-react'
+import SAMPLE_MARKDOWN from './sampleMarkdown'
 
-const SAMPLE_MARKDOWN = `# Project Specification
-
-## Overview
-
-This document outlines the requirements for the new **user authentication system**. The goal is to provide a secure, scalable solution that supports multiple authentication methods.
-
-## Requirements
-
-### Functional Requirements
-
-1. Users must be able to register with email and password
-2. Support for OAuth providers (Google, GitHub)
-3. Two-factor authentication via SMS or authenticator app
-4. Password reset functionality via email
-
-### Non-Functional Requirements
-
-- Response time under 200ms for authentication requests
-- Support for 10,000 concurrent users
-- 99.9% uptime SLA
-
-## Technical Approach
-
-We will use \`JWT tokens\` for session management with the following structure:
-
-\`\`\`json
-{
-  "sub": "user-id",
-  "exp": 1234567890,
-  "roles": ["user", "admin"]
+const FEEDBACK_SETTINGS_KEY = 'markdown_annotator_feedback_settings_v1'
+const DEFAULT_FEEDBACK_SETTINGS = {
+  header: '## Feedback\n\nGenerated with Specmark',
+  includeLineNumbers: false,
 }
-\`\`\`
-
-## Timeline
-
-| Phase | Description | Duration |
-|-------|-------------|----------|
-| Design | Architecture and API design | 2 weeks |
-| Implementation | Core authentication logic | 4 weeks |
-| Testing | Security audit and QA | 2 weeks |
-
-## Open Questions
-
-- Should we support biometric authentication?
-- What is the session timeout policy?
-`
 
 // Generate a simple hash for the markdown content
 function hashContent(content) {
@@ -75,6 +34,22 @@ function createAnnotationId() {
     return cryptoObj.randomUUID()
   }
   return `a_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
+}
+
+function readFeedbackSettings() {
+  if (typeof window === 'undefined') return DEFAULT_FEEDBACK_SETTINGS
+  try {
+    const stored = localStorage.getItem(FEEDBACK_SETTINGS_KEY)
+    if (!stored) return DEFAULT_FEEDBACK_SETTINGS
+    const parsed = JSON.parse(stored)
+    return {
+      header: typeof parsed?.header === 'string' ? parsed.header : DEFAULT_FEEDBACK_SETTINGS.header,
+      includeLineNumbers: Boolean(parsed?.includeLineNumbers),
+    }
+  } catch (err) {
+    console.warn('Failed to read feedback settings:', err)
+    return DEFAULT_FEEDBACK_SETTINGS
+  }
 }
 
 function getInitialState() {
@@ -167,6 +142,7 @@ function App() {
   const [shareLoadOrigin, setShareLoadOrigin] = useState(null)
   const [codeInput, setCodeInput] = useState('')
   const [codeInputError, setCodeInputError] = useState('')
+  const [exportSettings, setExportSettings] = useState(() => readFeedbackSettings())
   const sessionRestoredRef = useRef(initialState.fromSession)
   const annotationViewRef = useRef(null)
 
@@ -290,6 +266,15 @@ function App() {
     return () => window.clearTimeout(timeoutId)
   }, [markdownContent, annotations, currentView, shareCode])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      localStorage.setItem(FEEDBACK_SETTINGS_KEY, JSON.stringify(exportSettings))
+    } catch (err) {
+      console.warn('Failed to save feedback settings:', err)
+    }
+  }, [exportSettings])
+
   const handleAddAnnotation = (annotation) => {
     setAnnotations((prev) => [...prev, { ...annotation, id: createAnnotationId() }])
   }
@@ -410,64 +395,16 @@ function App() {
         )}
       </header>
 
-      {/* Mode Toggle + Action Buttons Row */}
-      <div className="border-b border-border px-4 sm:px-6 py-3 flex items-center justify-between">
-        {/* Mode Toggle */}
-        <div className="inline-flex rounded-full border border-border p-0.5 bg-background">
-          <button
-            onClick={() => navigateToView('input')}
-            className={cn(
-              'px-4 py-1.5 text-sm font-medium rounded-full transition-colors',
-              currentView === 'input'
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            Edit
-          </button>
-          <button
-            onClick={() => markdownContent.trim() && navigateToView('annotate')}
-            disabled={!markdownContent.trim()}
-            className={cn(
-              'px-4 py-1.5 text-sm font-medium rounded-full transition-colors',
-              currentView === 'annotate'
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed'
-            )}
-          >
-            Review
-          </button>
-        </div>
-
-        {/* Action Button (context-dependent) */}
-        <div>
-          {currentView === 'input' ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setMarkdownContent('')}
-              disabled={!markdownContent.trim()}
-              className="gap-2"
-            >
-              <Sparkles className="h-4 w-4" />
-              <span className="hidden sm:inline">Clear markdown</span>
-              <span className="sm:hidden">Clear</span>
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => annotationViewRef.current?.copyAll()}
-              disabled={annotations.length === 0}
-              className="gap-2"
-            >
-              <Copy className="h-4 w-4" />
-              <span className="hidden sm:inline">Copy comments</span>
-              <span className="sm:hidden">Copy</span>
-            </Button>
-          )}
-        </div>
-      </div>
+      <ReviewToolbar
+        currentView={currentView}
+        canReview={Boolean(markdownContent.trim())}
+        annotationsLength={annotations.length}
+        onNavigate={navigateToView}
+        onClearMarkdown={() => setMarkdownContent('')}
+        onCopyComments={() => annotationViewRef.current?.copyAll()}
+        exportSettings={exportSettings}
+        onExportSettingsChange={setExportSettings}
+      />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -489,6 +426,8 @@ function App() {
             }}
             onDeleteAnnotation={handleDeleteAnnotation}
             onClearAnnotations={handleClearAnnotations}
+            exportSettings={exportSettings}
+            onExportSettingsChange={setExportSettings}
           />
         )}
       </div>

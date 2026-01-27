@@ -36,12 +36,6 @@ if (typeof window !== 'undefined' && !customElements.get('sm-highlight')) {
   customElements.define('sm-highlight', SmHighlight)
 }
 
-const FEEDBACK_SETTINGS_KEY = 'markdown_annotator_feedback_settings_v1'
-const DEFAULT_FEEDBACK_SETTINGS = {
-  header: '## Feedback\n\nGenerated with Specmark',
-  includeLineNumbers: false,
-}
-
 const MARKDOWN_PLUGINS = [remarkGfm]
 const MARKDOWN_COMPONENTS = {
   table: ({ ...props }) => (
@@ -59,22 +53,6 @@ const MarkdownContent = memo(function MarkdownContent({ content }) {
   )
 })
 
-function readFeedbackSettings() {
-  if (typeof window === 'undefined') return DEFAULT_FEEDBACK_SETTINGS
-  try {
-    const stored = localStorage.getItem(FEEDBACK_SETTINGS_KEY)
-    if (!stored) return DEFAULT_FEEDBACK_SETTINGS
-    const parsed = JSON.parse(stored)
-    return {
-      header: typeof parsed?.header === 'string' ? parsed.header : DEFAULT_FEEDBACK_SETTINGS.header,
-      includeLineNumbers: Boolean(parsed?.includeLineNumbers),
-    }
-  } catch (err) {
-    console.warn('Failed to read feedback settings:', err)
-    return DEFAULT_FEEDBACK_SETTINGS
-  }
-}
-
 const AnnotationView = forwardRef(function AnnotationView({
   content,
   annotations,
@@ -82,6 +60,8 @@ const AnnotationView = forwardRef(function AnnotationView({
   onUpdateAnnotation,
   onDeleteAnnotation,
   onClearAnnotations,
+  exportSettings,
+  onExportSettingsChange,
 }, ref) {
   const [showCommentDialog, setShowCommentDialog] = useState(false)
   const [showTooltip, setShowTooltip] = useState(false)
@@ -103,7 +83,6 @@ const AnnotationView = forwardRef(function AnnotationView({
     mql.addEventListener('change', handler)
     return () => mql.removeEventListener('change', handler)
   }, [])
-  const [exportSettings, setExportSettings] = useState(() => readFeedbackSettings())
   const [returnFocusElement, setReturnFocusElement] = useState(null)
   const [overlapToast, setOverlapToast] = useState(false)
   const highlightRefs = useRef([])
@@ -120,15 +99,6 @@ const AnnotationView = forwardRef(function AnnotationView({
 
   const isMobile = typeof window !== 'undefined'
     && window.matchMedia('(max-width: 640px)').matches
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      localStorage.setItem(FEEDBACK_SETTINGS_KEY, JSON.stringify(exportSettings))
-    } catch (err) {
-      console.warn('Failed to save feedback settings:', err)
-    }
-  }, [exportSettings])
 
   const handleCopyFeedback = useCallback(async () => {
     if (annotations.length === 0) return
@@ -620,7 +590,7 @@ const AnnotationView = forwardRef(function AnnotationView({
               onClearAnnotations={onClearAnnotations}
               onEditAnnotation={handleEditFromList}
               exportSettings={exportSettings}
-              onExportSettingsChange={setExportSettings}
+              onExportSettingsChange={onExportSettingsChange}
               onClose={() => {
                 setShowAnnotations(false)
                 resetSheet()
