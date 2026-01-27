@@ -3,6 +3,16 @@ import { Button } from '@/components/ui/button'
 
 const COMMENT_BOX_WIDTH = 288
 const COMMENT_GAP = 14
+const COMMENT_VERTICAL_GAP = 12
+
+// Estimate comment box height based on text length and width
+function estimateBoxHeight(comment, boxWidth = COMMENT_BOX_WIDTH) {
+  const charsPerLine = Math.floor(boxWidth / 7.5)
+  const lines = Math.ceil((comment?.length || 0) / charsPerLine)
+  const lineHeight = 24
+  const padding = 28 // py-2 + button row
+  return Math.max(52, lines * lineHeight + padding)
+}
 
 function buildPositions({ annotations, contentRef, wrapperRef }) {
   if (!contentRef.current || !wrapperRef.current || typeof window === 'undefined') {
@@ -47,7 +57,8 @@ function buildPositions({ annotations, contentRef, wrapperRef }) {
   sorted.forEach((item) => {
     const alignedTop = Math.max(item.top, nextTop)
     item.top = alignedTop
-    nextTop = alignedTop + 76
+    const boxHeight = estimateBoxHeight(item.annotation.comment, columnLeft > 260 ? 288 : 240)
+    nextTop = alignedTop + boxHeight + COMMENT_VERTICAL_GAP
   })
   return sorted
 }
