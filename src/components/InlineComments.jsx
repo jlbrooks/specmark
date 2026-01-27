@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 
-const COMMENT_BOX_WIDTH = 288
+const COMMENT_BOX_WIDTH = 320
 const COMMENT_GAP = 14
 const COMMENT_VERTICAL_GAP = 12
 
@@ -57,7 +57,8 @@ function buildPositions({ annotations, contentRef, wrapperRef }) {
   sorted.forEach((item) => {
     const alignedTop = Math.max(item.top, nextTop)
     item.top = alignedTop
-    const boxHeight = estimateBoxHeight(item.annotation.comment, columnLeft > 260 ? 288 : 240)
+    const boxWidth = columnLeft > 320 ? 320 : columnLeft > 260 ? 288 : 240
+    const boxHeight = estimateBoxHeight(item.annotation.comment, boxWidth)
     nextTop = alignedTop + boxHeight + COMMENT_VERTICAL_GAP
   })
   return sorted
@@ -104,7 +105,7 @@ export default function InlineComments({
       {positions.map(({ id, annotation, left, top }) => (
         <div
           key={id}
-          className="pointer-events-auto absolute w-60 xl:w-72 overflow-hidden rounded-xl border border-border bg-card/95 shadow-sm px-3 py-2 text-sm text-foreground backdrop-blur-sm"
+          className="pointer-events-auto absolute w-60 xl:w-72 2xl:w-80 overflow-hidden rounded-xl border border-border bg-card/95 shadow-sm px-3 py-2 text-sm text-foreground backdrop-blur-sm"
           style={{ left: `${left}px`, top: `${top}px` }}
           role="button"
           tabIndex={0}
