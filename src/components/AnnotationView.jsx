@@ -588,7 +588,7 @@ const AnnotationView = forwardRef(function AnnotationView(
       <div className="flex-1 overflow-auto">
         <div
           ref={contentWrapperRef}
-          className="relative max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8"
+          className="relative max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8"
         >
           <div
             ref={contentRef}
