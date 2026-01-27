@@ -13,7 +13,9 @@ export default function DocsView() {
       <header className="bg-background border-b border-border px-4 sm:px-6 py-4">
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold text-foreground">Specmark Documentation</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground">
+              Specmark Documentation
+            </h1>
             <p className="text-sm text-muted-foreground mt-1 hidden sm:block">
               Give precise feedback to AI agents on their Markdown output.
             </p>
@@ -27,14 +29,19 @@ export default function DocsView() {
       <main className="max-w-4xl mx-auto px-6 py-8 space-y-8">
         {/* What is Specmark */}
         <section>
-          <h2 className="text-xl font-semibold text-foreground mb-4">What is Specmark?</h2>
+          <h2 className="text-xl font-semibold text-foreground mb-4">
+            What is Specmark?
+          </h2>
           <Card>
             <CardContent className="pt-6">
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Specmark helps you give precise, contextual feedback to AI agents. When an LLM generates a spec,
-                design doc, or any Markdown content, paste it into Specmark to annotate specific sections with your feedback.
-                Then copy the structured comments back to your AI conversation. No more vague instructions like
-                "fix the third paragraph" — your feedback references the exact text.
+                Specmark helps you give precise, contextual feedback to AI
+                agents. When an LLM generates a spec, design doc, or any
+                Markdown content, paste it into Specmark to annotate specific
+                sections with your feedback. Then copy the structured comments
+                back to your AI conversation. No more vague instructions like
+                "fix the third paragraph" — your feedback references the exact
+                text.
               </p>
             </CardContent>
           </Card>
@@ -42,7 +49,9 @@ export default function DocsView() {
 
         {/* How to use */}
         <section>
-          <h2 className="text-xl font-semibold text-foreground mb-4">Workflow</h2>
+          <h2 className="text-xl font-semibold text-foreground mb-4">
+            Workflow
+          </h2>
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader className="pb-2">
@@ -50,7 +59,8 @@ export default function DocsView() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  Copy the Markdown output from your AI agent and paste it in <strong>Edit</strong> mode. Or use a share code from the CLI.
+                  Copy the Markdown output from your AI agent and paste it in{" "}
+                  <strong>Edit</strong> mode. Or use a share code from the CLI.
                 </p>
               </CardContent>
             </Card>
@@ -61,7 +71,9 @@ export default function DocsView() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  Switch to <strong>Review</strong> mode and select text to add feedback. Each annotation captures the exact text you're commenting on.
+                  Switch to <strong>Review</strong> mode and select text to add
+                  feedback. Each annotation captures the exact text you're
+                  commenting on.
                 </p>
               </CardContent>
             </Card>
@@ -72,7 +84,8 @@ export default function DocsView() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  Click <strong>Copy comments</strong> and paste the structured feedback back into your AI conversation for precise revisions.
+                  Click <strong>Copy comments</strong> and paste the structured
+                  feedback back into your AI conversation for precise revisions.
                 </p>
               </CardContent>
             </Card>
@@ -81,9 +94,12 @@ export default function DocsView() {
 
         {/* CLI Section */}
         <section>
-          <h2 className="text-xl font-semibold text-foreground mb-4">CLI (Optional)</h2>
+          <h2 className="text-xl font-semibold text-foreground mb-4">
+            CLI (Optional)
+          </h2>
           <p className="text-sm text-muted-foreground mb-4">
-            For longer documents, use the CLI to upload Markdown files and get a share code you can load in the app.
+            For longer documents or mobile workflows, use the CLI to upload
+            Markdown files and get a share code you can load in the app.
           </p>
 
           <Card>
@@ -146,12 +162,11 @@ specmark ./specs/authentication.md`}</code>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li>Uploads Markdown to the Specmark share API.</li>
                 <li>Returns a 6-character share code plus a share URL.</li>
-                <li>Works with local or production endpoints via env vars.</li>
               </ul>
             </CardContent>
           </Card>
         </section>
       </main>
     </div>
-  )
+  );
 }
