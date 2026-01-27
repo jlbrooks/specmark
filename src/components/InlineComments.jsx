@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 
-const COMMENT_BOX_WIDTH = 240
+const COMMENT_BOX_WIDTH = 288
 const COMMENT_GAP = 14
 
 function buildPositions({ annotations, contentRef, wrapperRef }) {
@@ -93,7 +93,7 @@ export default function InlineComments({
       {positions.map(({ id, annotation, left, top }) => (
         <div
           key={id}
-          className="pointer-events-auto absolute w-60 overflow-hidden rounded-xl border border-border bg-card/95 shadow-sm px-3 py-2 text-sm text-foreground backdrop-blur-sm"
+          className="pointer-events-auto absolute w-60 xl:w-72 overflow-hidden rounded-xl border border-border bg-card/95 shadow-sm px-3 py-2 text-sm text-foreground backdrop-blur-sm"
           style={{ left: `${left}px`, top: `${top}px` }}
           role="button"
           tabIndex={0}
