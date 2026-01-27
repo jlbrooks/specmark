@@ -3,6 +3,7 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import CommentDialog from './CommentDialog'
 import AnnotationList from './AnnotationList'
+import InlineComments from './InlineComments'
 import { trackEvent } from '../utils/analytics'
 import { getRangeOffsets, normalizeSelectionRange } from '../utils/selection'
 import { generateFeedbackText } from '../utils/feedbackExport'
@@ -107,6 +108,7 @@ const AnnotationView = forwardRef(function AnnotationView({
   const [overlapToast, setOverlapToast] = useState(false)
   const highlightRefs = useRef([])
   const contentRef = useRef(null)
+  const contentWrapperRef = useRef(null)
   const selectionRangeRef = useRef(null)
   const selectionOffsetsRef = useRef(null)
   const openingDialogRef = useRef(false)
@@ -560,7 +562,10 @@ const AnnotationView = forwardRef(function AnnotationView({
 
       {/* Main content */}
       <div className="flex-1 overflow-auto">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <div
+        ref={contentWrapperRef}
+        className="relative max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8"
+      >
         <div
           ref={contentRef}
           tabIndex={-1}
@@ -569,22 +574,17 @@ const AnnotationView = forwardRef(function AnnotationView({
         >
           <MarkdownContent content={content} />
         </div>
+        <InlineComments
+          annotations={annotations}
+          contentRef={contentRef}
+          wrapperRef={contentWrapperRef}
+          onEditAnnotation={handleEditFromList}
+          onDeleteAnnotation={onDeleteAnnotation}
+          refreshKey={`${content.length}-${annotations.length}-${showCommentDialog}`}
+          hidden={isMobile || !showAnnotations}
+        />
       </div>
       </div>
-
-      {/* Floating annotations panel - desktop */}
-      {showAnnotations && annotations.length > 0 && (
-        <div className="hidden sm:block fixed right-4 top-36 bottom-4 w-80 z-30">
-          <AnnotationList
-            annotations={annotations}
-            onDeleteAnnotation={onDeleteAnnotation}
-            onClearAnnotations={onClearAnnotations}
-            onEditAnnotation={handleEditFromList}
-            exportSettings={exportSettings}
-            onExportSettingsChange={setExportSettings}
-          />
-        </div>
-      )}
 
       {showAnnotations && annotations.length > 0 && (
         <div className="sm:hidden fixed inset-0 z-50">
