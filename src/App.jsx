@@ -9,6 +9,7 @@ import { normalizeView, updateUrlParams, getViewFromUrl } from './utils/urlState
 import { fetchSharedContent } from './services/shareApi'
 import { trackEvent } from './utils/analytics'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import SAMPLE_MARKDOWN from './sampleMarkdown'
 
 const FEEDBACK_SETTINGS_KEY = 'markdown_annotator_feedback_settings_v1'
@@ -144,6 +145,7 @@ function App() {
   const [codeInputError, setCodeInputError] = useState('')
   const [exportSettings, setExportSettings] = useState(() => readFeedbackSettings())
   const [copyPulse, setCopyPulse] = useState(0)
+  const [showShareDialog, setShowShareDialog] = useState(false)
   const sessionRestoredRef = useRef(initialState.fromSession)
   const annotationViewRef = useRef(null)
   const topbarRef = useRef(null)
@@ -392,19 +394,20 @@ function App() {
     setCodeInputError('')
     handleLoadShareCode(code)
     setCodeInput('')
+    setShowShareDialog(false)
   }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <div ref={topbarRef} className="fixed top-0 left-0 right-0 z-50 bg-background">
         {/* Shared Header */}
-        <header className="border-b border-border px-4 sm:px-6 py-4">
+        <header className="border-b border-border px-3 sm:px-6 py-3 sm:py-4">
           <div className="flex items-center justify-between gap-4">
             {/* Logo */}
             <h1 className="text-xl font-medium text-black">Specmark</h1>
 
             {/* Right side: Docs, share code input, Load button */}
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="hidden sm:flex items-center gap-2 sm:gap-3">
               <Button asChild variant="outline" size="sm">
                 <a href="/docs">Docs</a>
               </Button>
@@ -418,33 +421,32 @@ function App() {
                 variant="desktop"
               />
             </div>
+            <div className="flex items-center gap-2 sm:hidden">
+              <Button asChild variant="outline" size="sm">
+                <a href="/docs">Docs</a>
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setShowShareDialog(true)}>
+                Load
+              </Button>
+            </div>
           </div>
 
-          <ShareCodeForm
-            value={codeInput}
-            onChange={setCodeInput}
-            onSubmit={handleLoadCode}
-            error={codeInputError}
-            onClearError={() => setCodeInputError('')}
-            variant="mobile"
-          />
-
           {codeInputError && (
-            <p className="mt-1 text-xs text-destructive">{codeInputError}</p>
+            <p className="mt-1 text-xs text-destructive hidden sm:block">{codeInputError}</p>
           )}
         </header>
 
         <ReviewToolbar
           currentView={currentView}
-        canReview={Boolean(markdownContent.trim())}
-        annotationsLength={annotations.length}
-        onNavigate={navigateToView}
-        onClearMarkdown={() => setMarkdownContent('')}
-        onCopyComments={handleCopyComments}
-        copyPulse={copyPulse}
-        exportSettings={exportSettings}
-        onExportSettingsChange={setExportSettings}
-      />
+          canReview={Boolean(markdownContent.trim())}
+          annotationsLength={annotations.length}
+          onNavigate={navigateToView}
+          onClearMarkdown={() => setMarkdownContent('')}
+          onCopyComments={handleCopyComments}
+          copyPulse={copyPulse}
+          exportSettings={exportSettings}
+          onExportSettingsChange={setExportSettings}
+        />
       </div>
 
       {/* Main Content */}
@@ -482,6 +484,26 @@ function App() {
           {shareLoadError.message}
         </div>
       )}
+
+      <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Load shared file</DialogTitle>
+            <DialogDescription>Enter a 6-character share code.</DialogDescription>
+          </DialogHeader>
+          <ShareCodeForm
+            value={codeInput}
+            onChange={setCodeInput}
+            onSubmit={handleLoadCode}
+            error={codeInputError}
+            onClearError={() => setCodeInputError('')}
+            variant="mobile"
+          />
+          {codeInputError && (
+            <p className="mt-2 text-xs text-destructive">{codeInputError}</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

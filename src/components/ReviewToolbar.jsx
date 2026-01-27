@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { Sparkles, Copy, Check } from 'lucide-react'
+import { Sparkles, Copy, Check, SlidersHorizontal } from 'lucide-react'
 
 export default function ReviewToolbar({
   currentView,
@@ -54,7 +54,7 @@ export default function ReviewToolbar({
   }, [copyPulse])
 
   return (
-    <div className="border-b border-border px-4 sm:px-6 py-3 flex items-center justify-between bg-background shadow-sm">
+    <div className="border-b border-border px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between bg-background shadow-sm">
       <div className="inline-flex rounded-full border border-border p-0.5 bg-background">
         <button
           onClick={() => onNavigate('input')}
@@ -101,8 +101,11 @@ export default function ReviewToolbar({
                 variant="outline"
                 size="sm"
                 onClick={() => setShowExportSettings((prev) => !prev)}
+                aria-label="Export settings"
+                className="px-2.5 sm:px-3"
               >
-                Export settings
+                <SlidersHorizontal className="h-4 w-4 sm:hidden" />
+                <span className="hidden sm:inline">Export settings</span>
               </Button>
               {showExportSettings && (
                 <div className="absolute right-0 mt-2 w-72 rounded-xl border border-border bg-card shadow-lg p-3 z-40">
@@ -138,7 +141,7 @@ export default function ReviewToolbar({
               onClick={onCopyComments}
               disabled={annotationsLength === 0}
               className={cn(
-                'gap-2 w-36 sm:w-44 justify-center shrink-0',
+                'gap-2 w-32 sm:w-44 justify-center shrink-0',
                 copied && 'border-emerald-300 bg-emerald-50 text-emerald-900',
                 animateCopy && 'copy-pop',
               )}
