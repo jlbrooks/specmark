@@ -145,6 +145,7 @@ function App() {
   const [exportSettings, setExportSettings] = useState(() => readFeedbackSettings())
   const sessionRestoredRef = useRef(initialState.fromSession)
   const annotationViewRef = useRef(null)
+  const topbarRef = useRef(null)
 
   const navigateToView = useCallback((view, { replace = false } = {}) => {
     updateUrlParams({ view }, { replace })
@@ -275,6 +276,35 @@ function App() {
     }
   }, [exportSettings])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const node = topbarRef.current
+    if (!node) return
+
+    const setHeight = () => {
+      const height = node.getBoundingClientRect().height
+      document.documentElement.style.setProperty('--app-topbar-height', `${height}px`)
+    }
+
+    setHeight()
+
+    let observer
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => setHeight())
+      observer.observe(node)
+    } else {
+      window.addEventListener('resize', setHeight)
+    }
+
+    return () => {
+      if (observer) {
+        observer.disconnect()
+      } else {
+        window.removeEventListener('resize', setHeight)
+      }
+    }
+  }, [])
+
   const handleAddAnnotation = (annotation) => {
     setAnnotations((prev) => [...prev, { ...annotation, id: createAnnotationId() }])
   }
@@ -358,56 +388,61 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Shared Header */}
-      <header className="border-b border-border px-4 sm:px-6 py-4">
-        <div className="flex items-center justify-between gap-4">
-          {/* Logo */}
-          <h1 className="text-xl font-medium text-black">Specmark</h1>
+      <div ref={topbarRef} className="fixed top-0 left-0 right-0 z-50 bg-background">
+        {/* Shared Header */}
+        <header className="border-b border-border px-4 sm:px-6 py-4">
+          <div className="flex items-center justify-between gap-4">
+            {/* Logo */}
+            <h1 className="text-xl font-medium text-black">Specmark</h1>
 
-          {/* Right side: Docs, share code input, Load button */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Button asChild variant="outline" size="sm">
-              <a href="/docs">Docs</a>
-            </Button>
+            {/* Right side: Docs, share code input, Load button */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Button asChild variant="outline" size="sm">
+                <a href="/docs">Docs</a>
+              </Button>
 
-            <ShareCodeForm
-              value={codeInput}
-              onChange={setCodeInput}
-              onSubmit={handleLoadCode}
-              error={codeInputError}
-              onClearError={() => setCodeInputError('')}
-              variant="desktop"
-            />
+              <ShareCodeForm
+                value={codeInput}
+                onChange={setCodeInput}
+                onSubmit={handleLoadCode}
+                error={codeInputError}
+                onClearError={() => setCodeInputError('')}
+                variant="desktop"
+              />
+            </div>
           </div>
-        </div>
 
-        <ShareCodeForm
-          value={codeInput}
-          onChange={setCodeInput}
-          onSubmit={handleLoadCode}
-          error={codeInputError}
-          onClearError={() => setCodeInputError('')}
-          variant="mobile"
+          <ShareCodeForm
+            value={codeInput}
+            onChange={setCodeInput}
+            onSubmit={handleLoadCode}
+            error={codeInputError}
+            onClearError={() => setCodeInputError('')}
+            variant="mobile"
+          />
+
+          {codeInputError && (
+            <p className="mt-1 text-xs text-destructive">{codeInputError}</p>
+          )}
+        </header>
+
+        <ReviewToolbar
+          currentView={currentView}
+          canReview={Boolean(markdownContent.trim())}
+          annotationsLength={annotations.length}
+          onNavigate={navigateToView}
+          onClearMarkdown={() => setMarkdownContent('')}
+          onCopyComments={() => annotationViewRef.current?.copyAll()}
+          exportSettings={exportSettings}
+          onExportSettingsChange={setExportSettings}
         />
-
-        {codeInputError && (
-          <p className="mt-1 text-xs text-destructive">{codeInputError}</p>
-        )}
-      </header>
-
-      <ReviewToolbar
-        currentView={currentView}
-        canReview={Boolean(markdownContent.trim())}
-        annotationsLength={annotations.length}
-        onNavigate={navigateToView}
-        onClearMarkdown={() => setMarkdownContent('')}
-        onCopyComments={() => annotationViewRef.current?.copyAll()}
-        exportSettings={exportSettings}
-        onExportSettingsChange={setExportSettings}
-      />
+      </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div
+        className="flex-1 flex flex-col overflow-hidden"
+        style={{ paddingTop: 'var(--app-topbar-height, 0px)' }}
+      >
         {currentView === 'input' ? (
           <InputView
             content={markdownContent}
