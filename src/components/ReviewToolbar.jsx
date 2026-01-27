@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { Sparkles, Copy } from 'lucide-react'
+import { Sparkles, Copy, Check } from 'lucide-react'
 
 export default function ReviewToolbar({
   currentView,
@@ -18,6 +18,7 @@ export default function ReviewToolbar({
 }) {
   const [showExportSettings, setShowExportSettings] = useState(false)
   const [animateCopy, setAnimateCopy] = useState(false)
+  const [copied, setCopied] = useState(false)
   const exportPanelRef = useRef(null)
 
   useEffect(() => {
@@ -39,9 +40,17 @@ export default function ReviewToolbar({
 
   useEffect(() => {
     if (!copyPulse) return
-    setAnimateCopy(true)
-    const timeout = window.setTimeout(() => setAnimateCopy(false), 420)
-    return () => window.clearTimeout(timeout)
+    setAnimateCopy(false)
+    setCopied(true)
+    const frame = window.requestAnimationFrame(() => setAnimateCopy(true))
+    const timeout = window.setTimeout(() => {
+      setCopied(false)
+      setAnimateCopy(false)
+    }, 1200)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(timeout)
+    }
   }, [copyPulse])
 
   return (
@@ -128,11 +137,15 @@ export default function ReviewToolbar({
               size="sm"
               onClick={onCopyComments}
               disabled={annotationsLength === 0}
-              className={cn('gap-2', animateCopy && 'copy-pop')}
+              className={cn(
+                'gap-2 w-36 sm:w-44 justify-center shrink-0',
+                copied && 'border-emerald-300 bg-emerald-50 text-emerald-900',
+                animateCopy && 'copy-pop',
+              )}
             >
-              <Copy className="h-4 w-4" />
-              <span className="hidden sm:inline">Copy comments</span>
-              <span className="sm:hidden">Copy</span>
+              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              <span className="hidden sm:inline">{copied ? 'Copied' : 'Copy comments'}</span>
+              <span className="sm:hidden">{copied ? 'Copied' : 'Copy'}</span>
             </Button>
           </>
         )}
