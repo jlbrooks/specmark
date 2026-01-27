@@ -36,7 +36,7 @@ export default function ReviewToolbar({
   }, [currentView])
 
   return (
-    <div className="border-b border-border px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-50 bg-background/95 backdrop-blur-sm">
+    <div className="border-b border-border px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-50 bg-background shadow-sm">
       <div className="inline-flex rounded-full border border-border p-0.5 bg-background">
         <button
           onClick={() => onNavigate('input')}
