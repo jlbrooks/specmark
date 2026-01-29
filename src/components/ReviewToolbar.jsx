@@ -4,6 +4,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { Sparkles, Copy, Check, SlidersHorizontal } from 'lucide-react'
+import CoachMark from './CoachMark'
+import { hasSeenMark } from '@/lib/coachMarks'
 
 export default function ReviewToolbar({
   currentView,
@@ -135,21 +137,32 @@ export default function ReviewToolbar({
                 </div>
               )}
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onCopyComments}
-              disabled={annotationsLength === 0}
-              className={cn(
-                'gap-2 w-32 sm:w-44 justify-center shrink-0',
-                copied && 'border-emerald-300 bg-emerald-50 text-emerald-900',
-                animateCopy && 'copy-pop',
-              )}
-            >
-              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              <span className="hidden sm:inline">{copied ? 'Copied' : 'Copy comments'}</span>
-              <span className="sm:hidden">{copied ? 'Copied' : 'Copy'}</span>
-            </Button>
+            <div className="relative">
+              <CoachMark
+                id="export-hint"
+                position="bottom"
+                show={annotationsLength >= 2 && !hasSeenMark('export-hint')}
+                className="right-0 whitespace-nowrap"
+                autoDismissMs={8000}
+              >
+                Copy to export your feedback
+              </CoachMark>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onCopyComments}
+                disabled={annotationsLength === 0}
+                className={cn(
+                  'gap-2 w-32 sm:w-44 justify-center shrink-0',
+                  copied && 'border-emerald-300 bg-emerald-50 text-emerald-900',
+                  animateCopy && 'copy-pop',
+                )}
+              >
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                <span className="hidden sm:inline">{copied ? 'Copied' : 'Copy comments'}</span>
+                <span className="sm:hidden">{copied ? 'Copied' : 'Copy'}</span>
+              </Button>
+            </div>
           </>
         )}
       </div>

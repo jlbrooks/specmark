@@ -12,6 +12,7 @@ import remarkGfm from "remark-gfm";
 import CommentDialog from "./CommentDialog";
 import AnnotationList from "./AnnotationList";
 import InlineComments from "./InlineComments";
+import CoachMark from "./CoachMark";
 import { trackEvent } from "../utils/analytics";
 import { getRangeOffsets, normalizeSelectionRange } from "../utils/selection";
 import { generateFeedbackText } from "../utils/feedbackExport";
@@ -82,6 +83,7 @@ const AnnotationView = forwardRef(function AnnotationView(
     onClearAnnotations,
     exportSettings,
     onExportSettingsChange,
+    isSampleContent = false,
   },
   ref,
 ) {
@@ -107,6 +109,10 @@ const AnnotationView = forwardRef(function AnnotationView(
   }, []);
   const [returnFocusElement, setReturnFocusElement] = useState(null);
   const [overlapToast, setOverlapToast] = useState(false);
+  const [sampleBannerDismissed, setSampleBannerDismissed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("specmark_sample_banner_dismissed") === "true";
+  });
   const highlightRefs = useRef([]);
   const contentRef = useRef(null);
   const contentWrapperRef = useRef(null);
@@ -590,6 +596,40 @@ const AnnotationView = forwardRef(function AnnotationView(
           ref={contentWrapperRef}
           className="relative max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8"
         >
+          {/* Sample content banner */}
+          {isSampleContent && !sampleBannerDismissed && (
+            <div className="mb-4 flex items-center justify-between gap-3 bg-blue-50 border border-blue-200 text-blue-900 text-sm px-4 py-3 rounded-lg">
+              <span>
+                This is a sample document with example feedback. Paste your own
+                markdown in Edit mode.
+              </span>
+              <button
+                onClick={() => {
+                  setSampleBannerDismissed(true);
+                  localStorage.setItem(
+                    "specmark_sample_banner_dismissed",
+                    "true",
+                  );
+                }}
+                className="shrink-0 text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {/* Select text coach mark */}
+          <div className="relative mb-2">
+            <CoachMark
+              id="select-text"
+              position="bottom"
+              className="left-0"
+              autoDismissMs={10000}
+            >
+              Select any text to add feedback
+            </CoachMark>
+          </div>
+
           <div
             ref={contentRef}
             tabIndex={-1}

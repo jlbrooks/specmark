@@ -343,3 +343,19 @@ sm-highlight.sm-highlight--has-comment {
   border-top: 1px solid var(--border);
   margin: 1.5rem 0;
 }
+
+/* Coach mark animation */
+@keyframes coach-mark-in {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-coach-mark-in {
+  animation: coach-mark-in 300ms ease-out;
+}

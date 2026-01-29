@@ -11,6 +11,8 @@ import { trackEvent } from './utils/analytics'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import SAMPLE_MARKDOWN from './sampleMarkdown'
+import { SAMPLE_ANNOTATIONS } from './sampleAnnotations'
+import { hasVisitedBefore, setHasVisited } from './lib/coachMarks'
 
 const FEEDBACK_SETTINGS_KEY = 'markdown_annotator_feedback_settings_v1'
 const DEFAULT_FEEDBACK_SETTINGS = {
@@ -118,6 +120,22 @@ function getInitialState() {
       pendingShareCode: null,
       fromSession: true,
       source: 'session',
+    }
+  }
+
+  // First-time visitor: show sample with annotations in Review mode
+  const isFirstVisit = !hasVisitedBefore()
+  if (isFirstVisit) {
+    setHasVisited()
+    return {
+      markdown: SAMPLE_MARKDOWN,
+      annotations: SAMPLE_ANNOTATIONS,
+      view: 'annotate',
+      shareCode: null,
+      pendingShareCode: null,
+      fromSession: false,
+      source: 'sample',
+      isFirstVisit: true,
     }
   }
 
@@ -474,6 +492,7 @@ function App() {
             onClearAnnotations={handleClearAnnotations}
             exportSettings={exportSettings}
             onExportSettingsChange={setExportSettings}
+            isSampleContent={markdownContent === SAMPLE_MARKDOWN}
           />
         )}
       </div>
